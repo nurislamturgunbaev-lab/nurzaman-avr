@@ -65,6 +65,506 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 .err{color:var(--warn);margin-top:8px}
 .ok{color:var(--acc);margin-top:8px}
 /* лист A4 для PDF */
+#sheet{position:fixed;left:-10000px;top:0}
+.a4{width:794px;min-height:1123px;background:#fff;color:#000;padding:56px 60px;font:13px/1.4 Montserrat,Arial,sans-serif;box-sizing:border-box}
+#pvBox{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff}
+#pv{transform-origin:top left}
+.a4 .ap{margin-left:auto;width:55%}
+.a4 .ap .h{font-weight:700;margin-bottom:12px}
+.a4 .pl{display:flex;align-items:flex-end;gap:8px;margin:0 0 14px}
+.a4 .pl .ln2{flex:1;border-bottom:1px solid #000;margin:0 4px 4px;min-width:60px}
+.a4 .c{text-align:center}.a4 .r{text-align:right}
+.a4 table{width:100%;border-collapse:collapse;margin-top:16px}
+.a4 th,.a4 td{border:1px solid #000;padding:6px;font-size:12.5px}
+.a4 th{font-weight:700;text-align:center}
+.a4 td{text-align:center}.a4 td.l{text-align:left}.a4 td.n{text-align:right}
+.a4 .grp{font-style:italic;margin:26px 0 10px}
+.a4 .sg2{display:flex;align-items:flex-end;margin:0 0 14px;font-weight:700}
+.a4 .sg2 .ln2{flex:1;max-width:120px;border-bottom:1px solid #000;margin:0 8px 4px auto}
+</style>
+</head>
+<body>
+<header><b>Акт выполненных работ</b><small id="st">Загружаю журнал договоров…</small></header>
+<div class="wrap">
+
+<div class="card">
+  <p class="step"><i>0.</i> Поиск подрядчика (из журнала Нурзаман)</p>
+  <input id="q" placeholder="Начните вводить ФИО, компанию или № договора" autocomplete="off">
+  <div class="list" id="list"></div>
+</div>
+
+<div class="card ctr" id="ctr">
+  <h3 id="cWho"></h3>
+  <div class="muted" id="cMeta"></div>
+  <div class="links" id="cLinks"></div>
+  <div class="muted">Работы по договору — нажмите «+ в акт»:</div>
+  <div class="lines" id="cLines"></div>
+</div>
+
+<div class="card">
+  <p class="step"><i>I.</i> Объект и договор</p>
+  <div class="row2">
+    <div><label for="num">На основании договора №</label><input id="num"></div>
+    <div><label for="date">Дата акта</label><input id="date" type="date"></div>
+  </div>
+  <label for="obj">Объект</label><input id="obj">
+  <label for="title">Описание работ (после слов «Акт выполненных работ»)</label><input id="title" placeholder="можно оставить пустым">
+</div>
+<div class="card">
+  <p class="step"><i>III.</i> Работы</p>
+  <div id="rows"></div>
+  <button class="add" id="addRow" type="button">+ Добавить работу вручную</button>
+  <label class="tax"><input type="checkbox" id="tax"> Добавить единый налог (4%) — сумма делится на 96%</label>
+  <div class="total"><span>Итого</span><span id="total">0</span></div>
+  <div class="muted" id="words"></div>
+</div>
+
+<div class="card">
+  <details>
+    <summary>Подписи: II. Утверждаю · IV. Работы приняли · V. Работы сдал (нажмите, чтобы изменить)</summary>
+    <div id="sig"></div>
+    <div class="sgh">V. РАБОТЫ СДАЛ</div>
+    <div class="row2"><div><label for="exe">Исполнитель (компания)</label><input id="exe" placeholder="ИП / ОсОО …"></div><div><label for="giver">ФИО сдавшего (необязательно)</label><input id="giver"></div></div>
+    <div class="row2" style="margin-top:8px"><button id="addAp" type="button">+ утверждающий</button><button id="addAc" type="button">+ принимающий</button></div>
+    <div class="muted" style="margin-top:6px">Подписи запоминаются на этом телефоне для каждого объекта.</div>
+  </details>
+</div>
+
+<p class="step" style="margin-top:4px"><i>VI.</i> Печать</p>
+<div class="go">
+  <button class="pri" id="pdf" type="button">Скачать PDF</button>
+  <button class="pri" id="word" type="button">Скачать Word</button>
+  <button class="share" id="share" type="button">Отправить в WhatsApp / Telegram</button>
+</div>
+<div class="err" id="err"></div>
+<div class="ok" id="ok"></div>
+
+<div class="card" style="margin-top:14px">
+  <p class="step"><i>VII.</i> Предпросмотр акта</p>
+  <div id="pvBox"><div id="pv" class="a4"></div></div>
+</div>
+</div>
+
+<div id="sheet" class="a4"></div>
+
+<script>
+var SHEET_ID = '1jUM4OQT9KwZdvsXJjHLaj23qscH8CrynlTQWKYlLiwI';
+var DEF_SIG = {
+  approve: [{ role: 'Директор', name: 'Айткулов И.С.' }, { role: 'Заместитель директора', name: 'Алимбеков А.Т.' }, { role: 'Руководитель проекта', name: 'Убайдилла уулу Р.' }],
+  accept: [{ role: 'Руководитель ПТО', name: 'Дуйшобай уулу Женишбек' }, { role: 'Инженеры ПТО', name: 'Тургунбаев Нурислам' }, { role: 'Прораб', name: 'Таалай уулу Нурсултан' }]
+};
+var CONTRACTS = [], LINKS = {}, NAMES = {}, K = null, ROWS = [], SIG = null;
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function clean(x) { return String(x || '').replace(/\s+/g, ' ').trim().replace(/^ИП\s+/i, '').trim(); }
+function num(s) { if (s == null) return NaN; s = String(s).replace(/[\s ]/g, '').replace(',', '.'); return s === '' ? NaN : Number(s); }
+function fmt(n) { if (n === '' || n == null || isNaN(n)) return ''; return (Math.round(n * 100) / 100).toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).replace(/ /g, ' '); }
+function okey(s) { return String(s || '').toLowerCase().replace(/[«»"'“”]/g, '').replace(/\s+/g, ' ').trim(); }
+function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
+
+/* ---------- строка работы: «Название - 10 м2 × 500» или «Название - 500 за м2» ---------- */
+function parseLine(line) {
+  var t = String(line || '').replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  var N = '(\\d[\\d\\s\\u00a0]*(?:[.,]\\d+)?)', m;
+  m = t.match(new RegExp('^(.*\\S)\\s+[-–—]\\s+' + N + '\\s*([^\\s\\d×xх*][^×xх*]*?)?\\s*[×xх*]\\s*' + N + '\\s*$'));
+  if (m) return { name: m[1].trim(), qty: num(m[2]), unit: (m[3] || '').trim().replace(/\.$/, ''), price: num(m[4]) };
+  m = t.match(new RegExp('^(.*\\S)\\s+[-–—]\\s+' + N + '\\s*за\\s+(.+)$'));
+  if (m) return { name: m[1].trim(), qty: NaN, unit: m[3].trim(), price: num(m[2]) };
+  m = t.match(new RegExp('^(.*\\S)\\s+[-–—]\\s+' + N + '\\s*(?:сом)?$'));
+  if (m && m[1].length > 3) return { name: m[1].trim(), qty: 1, unit: 'компл.', price: num(m[2]) };
+  return { name: t, qty: NaN, unit: '', price: NaN };
+}
+
+/* ---------- загрузка из Google-таблицы (как в старом калькуляторе) ---------- */
+var CB = 0;
+function gviz(params, done) {
+  var name = '__gv' + (++CB);
+  var s = document.createElement('script');
+  window[name] = function (r) { delete window[name]; s.remove(); done(r); };
+  s.onerror = function () { done(null); };
+  s.src = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/gviz/tq?' + params + '&tqx=out:json;responseHandler:' + name + '&_=' + Date.now();
+  document.body.appendChild(s);
+}
+function cells(r) {
+  if (!r || !r.table) return [];
+  return r.table.rows.map(function (row) { return (row.c || []).map(function (c) { return c ? (c.f != null ? c.f : (c.v == null ? '' : c.v)) : ''; }); });
+}
+var need = 3, RAW = null;
+function part() { if (--need === 0) build(); }
+gviz('gid=0&headers=1&tq=' + encodeURIComponent('select A,B,C,D,E,F'), function (r) { RAW = cells(r); part(); });
+gviz('sheet=' + encodeURIComponent('Ссылки АВР') + '&headers=1&tq=' + encodeURIComponent('select A,B,C'), function (r) {
+  cells(r).forEach(function (x) { LINKS[String(x[0]).replace(/\D/g, '')] = { dog: x[1] || '', avr: x[2] || '' }; }); part();
+});
+gviz('sheet=' + encodeURIComponent('Справочник ФИО') + '&headers=1&tq=' + encodeURIComponent('select A,B'), function (r) {
+  cells(r).forEach(function (x) { if (x[0]) NAMES[clean(x[0]).toLowerCase()] = String(x[1] || '').trim(); }); part();
+});
+
+function build() {
+  if (!RAW) { $('st').textContent = 'Не удалось загрузить журнал. Проверьте интернет и обновите страницу.'; return; }
+  var cur = null;
+  RAW.forEach(function (r, i) {
+    var row = i + 2;
+    var a = String(r[0] == null ? '' : r[0]), b = String(r[1] || ''), d = String(r[3] || ''), e = String(r[4] || ''), f = String(r[5] || '').trim();
+    var sub = /^\s+\S/.test(a) || /^\d+\/\d+$/.test(a.trim());
+    if (!sub) {
+      if (!b.trim() || !a.trim()) { cur = null; return; }
+      var cl = clean(b);
+      cur = { row: row, num: a.trim(), raw: b.replace(/\s+/g, ' ').trim(), who: NAMES[cl.toLowerCase()] || cl, org: String(r[2] || '').trim(), obj: f, date: e.trim(), parts: [] };
+      CONTRACTS.push(cur);
+    }
+    if (!cur) return;
+    cur.parts.push({ row: row, num: a.trim(), date: e.trim(), text: d, link: LINKS[row] || {} });
+  });
+  CONTRACTS.forEach(function (k) {
+    k.title = (k.parts[0].text.split('\n')[0] || '').trim();
+    k.hay = (k.who + ' ' + k.raw + ' №' + k.num + ' ' + k.num + ' ' + k.obj).toLowerCase();
+  });
+  CONTRACTS.sort(function (x, y) { return y.row - x.row; });
+  var ppl = {}; CONTRACTS.forEach(function (k) { ppl[k.who] = 1; });
+  $('st').textContent = 'Договоров: ' + CONTRACTS.length + ', подрядчиков: ' + Object.keys(ppl).length;
+}
+
+/* ---------- поиск ---------- */
+var HITS = [];
+$('q').addEventListener('input', function () {
+  var q = $('q').value.trim().toLowerCase(), box = $('list');
+  if (q.length < 2) { box.style.display = 'none'; return; }
+  var words = q.split(/\s+/);
+  HITS = CONTRACTS.filter(function (k) { return words.every(function (w) { return k.hay.indexOf(w) >= 0; }); }).slice(0, 40);
+  box.innerHTML = HITS.length ? HITS.map(function (k, i) {
+    return '<div class="opt" data-i="' + i + '"><b>' + esc(k.raw) + '<\/b><div class="d">' + esc(k.title) + '<\/div><i>' + esc([k.obj, k.date, 'договор №' + k.num].filter(Boolean).join(' · ')) + '<\/i><\/div>';
+  }).join('') : '<div class="opt muted">Ничего не найдено<\/div>';
+  box.style.display = 'block';
+});
+$('list').addEventListener('click', function (e) {
+  var o = e.target.closest('[data-i]'); if (!o) return;
+  pick(HITS[+o.dataset.i]); $('list').style.display = 'none';
+});
+
+function pick(k) {
+  K = k;
+  $('q').value = k.raw;
+  $('cWho').textContent = k.raw;
+  $('cMeta').textContent = ['Договор №' + k.num, k.date ? 'от ' + k.date : '', k.obj].filter(Boolean).join(' · ');
+  var links = '';
+  k.parts.forEach(function (p) {
+    var tag = p.num && p.num !== k.num ? ' №' + p.num : '';
+    if (p.link.dog) links += '<a href="' + esc(p.link.dog) + '" target="_blank" rel="noopener">📄 Договор' + esc(tag) + '<\/a>';
+    if (p.link.avr) links += '<a href="' + esc(p.link.avr) + '" target="_blank" rel="noopener">📑 Прошлый АВР' + esc(tag) + '<\/a>';
+  });
+  $('cLinks').innerHTML = links || '<span class="muted">PDF договора в журнале нет<\/span>';
+  var html = '', L = [];
+  k.parts.forEach(function (p) {
+    p.text.split('\n').forEach(function (line) {
+      if (!line.trim()) return;
+      var w = parseLine(line); L.push(w);
+      var meta = [p.num && p.num !== k.num ? 'доп. №' + p.num : '', p.date].filter(Boolean).join(' · ');
+      html += '<div class="ln"><div class="t">' + esc(line.trim()) + (meta ? '<small>' + esc(meta) + '<\/small>' : '') + '<\/div><button type="button" data-l="' + (L.length - 1) + '">+ в акт<\/button><\/div>';
+    });
+  });
+  K.lines = L;
+  $('cLines').innerHTML = html;
+  $('ctr').style.display = 'block';
+  $('num').value = k.num; $('obj').value = k.obj;
+  $('exe').value = /^(ИП|ОсОО|ОАО|ООО)\b/i.test(k.raw) ? k.raw : ((k.org ? k.org + ' ' : '') + k.who);
+  ROWS = []; addRow();
+  loadSig();
+}
+$('cLines').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-l]'); if (!b) return;
+  var w = K.lines[+b.dataset.l];
+  var row = { name: w.name, unit: w.unit || '', qty: '', price: isNaN(w.price) ? '' : w.price };
+  var empty = ROWS.findIndex(function (r) { return !String(r.name).trim(); });
+  if (empty >= 0) ROWS[empty] = row; else ROWS.push(row);
+  renderRows();
+  var i = empty >= 0 ? empty : ROWS.length - 1;
+  var q = document.querySelector('#rows [data-i="' + i + '"] input[data-k="qty"]');
+  if (q) { q.focus(); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  b.textContent = '✓ добавлено';
+});
+
+/* ---------- строки акта ---------- */
+function rowSum(r) { var q = num(r.qty), p = num(r.price); return (isNaN(q) || isNaN(p)) ? NaN : Math.round(q * p * 100) / 100; }
+function addRow() { ROWS.push({ name: '', unit: '', qty: '', price: '' }); renderRows(); }
+function renderRows() {
+  $('rows').innerHTML = ROWS.map(function (r, i) {
+    return '<div class="w" data-i="' + i + '"><div class="top"><b>' + (i + 1) + '.<\/b><input data-k="name" value="' + esc(r.name) + '" placeholder="Наименование работы"><button class="x" type="button" title="Удалить">×<\/button><\/div>' +
+      '<div class="nums"><input data-k="qty" value="' + esc(r.qty) + '" inputmode="decimal" placeholder="Кол-во"><input data-k="unit" value="' + esc(r.unit) + '" placeholder="ед. (м2)"><input data-k="price" value="' + esc(r.price) + '" inputmode="decimal" placeholder="Цена"><\/div>' +
+      '<div class="sum">' + fmt(rowSum(r)) + '<\/div><\/div>';
+  }).join('');
+  total();
+}
+function totalSum() { var t = 0; ROWS.forEach(function (r) { var s = rowSum(r); if (!isNaN(s)) t += s; }); return Math.round(t * 100) / 100; }
+function withTax(t) { return $('tax').checked ? Math.round(t / 0.96 * 100) / 100 : t; }
+function total() { var t = withTax(totalSum()); $('total').textContent = fmt(t) || '0'; $('words').textContent = t ? 'Сумма прописью: ' + words(t) : ''; }
+$('tax').addEventListener('change', total);
+$('rows').addEventListener('input', function (e) {
+  var w = e.target.closest('.w'); if (!w || !e.target.dataset.k) return;
+  var r = ROWS[+w.dataset.i]; r[e.target.dataset.k] = e.target.value;
+  w.querySelector('.sum').textContent = fmt(rowSum(r)); total(); $('err').textContent = '';
+});
+$('rows').addEventListener('click', function (e) {
+  if (!e.target.closest('.x')) return;
+  ROWS.splice(+e.target.closest('.w').dataset.i, 1); if (!ROWS.length) ROWS.push({ name: '', unit: '', qty: '', price: '' }); renderRows();
+});
+$('addRow').addEventListener('click', addRow);
+
+/* ---------- сумма прописью ---------- */
+function words(n) {
+  var som = Math.floor(n), tyy = Math.round((n - som) * 100);
+  var U = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять'], UF = ['', 'одна', 'две'];
+  var T = ['десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+  var D = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+  var H = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+  function form(x, a, b, c) { x = x % 100; if (x > 10 && x < 20) return c; x = x % 10; return x === 1 ? a : (x > 1 && x < 5 ? b : c); }
+  function tri(x, fem) { var r = [H[Math.floor(x / 100)]], d = x % 100; if (d >= 10 && d < 20) r.push(T[d - 10]); else { r.push(D[Math.floor(d / 10)]); var u = d % 10; r.push(fem && u < 3 ? UF[u] : U[u]); } return r.filter(Boolean).join(' '); }
+  if (som === 0) var s = 'ноль';
+  else {
+    var parts = [], g = [['', '', '', false], ['тысяча', 'тысячи', 'тысяч', true], ['миллион', 'миллиона', 'миллионов', false], ['миллиард', 'миллиарда', 'миллиардов', false]], i = 0, x = som;
+    while (x > 0) { var t = x % 1000; if (t) parts.unshift(tri(t, g[i][3]) + (i ? ' ' + form(t, g[i][0], g[i][1], g[i][2]) : '')); x = Math.floor(x / 1000); i++; }
+    s = parts.join(' ');
+  }
+  return s + ' сом ' + ('0' + tyy).slice(-2) + ' тыйын';
+}
+
+/* ---------- подписи ---------- */
+function loadSig() { var s = store('avr2_sig_' + okey($('obj').value)) || store('avr2_sig_default'); SIG = JSON.parse(JSON.stringify(s || DEF_SIG)); renderSig(); }
+function saveSig() { store('avr2_sig_' + okey($('obj').value), SIG); store('avr2_sig_default', SIG); }
+function renderSig() {
+  function line(g, x, i) { return '<div class="sg"><input data-g="' + g + '" data-i="' + i + '" data-k="role" value="' + esc(x.role) + '" placeholder="Должность"><input data-g="' + g + '" data-i="' + i + '" data-k="name" value="' + esc(x.name) + '" placeholder="ФИО"><button class="x" type="button" data-sg="' + g + '" data-si="' + i + '">×<\/button><\/div>'; }
+  var h = '<div class="sgh">II. УТВЕРЖДАЮ<\/div>';
+  SIG.approve.forEach(function (x, i) { h += line('approve', x, i); });
+  h += '<div class="sgh">IV. РАБОТЫ ПРИНЯЛИ<\/div>';
+  SIG.accept.forEach(function (x, i) { h += line('accept', x, i); });
+  $('sig').innerHTML = h;
+}
+$('sig').addEventListener('input', function (e) { var t = e.target; if (t.dataset.g) SIG[t.dataset.g][+t.dataset.i][t.dataset.k] = t.value; });
+$('sig').addEventListener('click', function (e) { var b = e.target.closest('[data-sg]'); if (!b) return; SIG[b.dataset.sg].splice(+b.dataset.si, 1); renderSig(); });
+$('addAp').addEventListener('click', function () { SIG.approve.push({ role: '', name: '' }); renderSig(); });
+$('addAc').addEventListener('click', function () { SIG.accept.push({ role: 'Мастер', name: '' }); renderSig(); });
+$('obj').addEventListener('change', loadSig);
+
+/* ---------- данные акта ---------- */
+function ruDate(iso) { if (!iso) return ''; var p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
+(function () { var d = new Date(); $('date').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
+loadSig();
+function gather() {
+  var a = {
+    num: $('num').value.trim(), date: ruDate($('date').value), obj: $('obj').value.trim(), title: $('title').value.trim(), giver: $('giver').value.trim(),
+    exe: $('exe').value.trim(), approve: SIG.approve.filter(function (x) { return x.role || x.name; }), accept: SIG.accept.filter(function (x) { return x.role || x.name; }),
+    rows: ROWS.filter(function (r) { return String(r.name).trim(); }).map(function (r) { return { name: String(r.name).trim(), unit: String(r.unit).trim(), qty: num(r.qty), price: num(r.price), sum: rowSum(r) }; })
+  };
+  a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.net = Math.round(a.net * 100) / 100;
+  a.taxOn = $('tax').checked; a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
+  a.head = 'Акт выполненных работ ' + (a.title ? a.title + ' ' : '') + 'на основании договора №' + a.num;
+  return a;
+}
+function collect() {
+  var a = gather();
+  var e = !a.num ? 'Выберите договор (шаг 1) или впишите номер.' : !a.exe ? 'Укажите исполнителя в «Подписи».' : !a.rows.length ? 'Добавьте хотя бы одну работу.' : '';
+  if (!e) { var bad = a.rows.findIndex(function (r) { return isNaN(r.qty) || isNaN(r.price); }); if (bad >= 0) e = 'Работа ' + (bad + 1) + ': укажите количество и цену.'; }
+  $('err').textContent = e; $('ok').textContent = '';
+  if (e) return null;
+  saveSig();
+  a.file = ('АВР №' + a.num + ' ' + a.exe + ' ' + a.date).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  return a;
+}
+
+/* ---------- PDF ---------- */
+function sheetHtml(a) {
+  var ap = a.approve.map(function (x) { return '<div class="pl"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span>' + esc(x.name) + '<\/span><\/div>'; }).join('');
+  var rows = a.rows.map(function (r, i) { return '<tr><td>' + (i + 1) + '<\/td><td class="l">' + esc(r.name) + '<\/td><td>' + esc(r.unit) + '<\/td><td>' + fmt(r.qty) + '<\/td><td class="n">' + fmt(r.price) + '<\/td><td class="n"><b>' + fmt(r.sum) + '<\/b><\/td><\/tr>'; }).join('');
+  var foot = a.taxOn
+    ? '<tr><td colspan="5" class="n">Итого без налога<\/td><td class="n">' + fmt(a.net) + '<\/td><\/tr><tr><td colspan="5" class="n">Единый налог 4%<\/td><td class="n">' + fmt(a.tax) + '<\/td><\/tr>'
+    : '';
+  foot += '<tr><td colspan="5" class="n"><b>Итого<\/b><\/td><td class="n"><b>' + fmt(a.total) + '<\/b><\/td><\/tr>';
+  var acc = a.accept.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span>' + esc(x.name) + '<\/span><\/div>'; }).join('');
+  if (isNaN(a.total)) a.total = 0;
+  return '<div class="ap"><div class="h">Утверждаю<\/div>' + ap + '<\/div>' +
+    '<p class="c" style="margin:22px 0 0"><i>по объекту: ' + esc(a.obj) + '<\/i><\/p>' +
+    '<p class="c" style="margin:10px 0 0;font-weight:700">' + esc(a.head) + '<\/p>' +
+    '<p class="r" style="margin:8px 0 0">' + esc(a.date) + '<\/p>' +
+    '<table><tr><th style="width:34px">№ п/п<\/th><th>Наименование работ<\/th><th style="width:70px">Ед. изм.<\/th><th style="width:52px">Кол-во<\/th><th style="width:96px">Стоимость работы<\/th><th style="width:96px">Итого<\/th><\/tr>' + rows + foot + '<\/table>' +
+    '<p style="margin-top:22px">Всего выполнено работ на сумму: ' + esc(words(a.total)) + '<\/p>' +
+    '<div class="grp">Работы приняли:<\/div>' + acc +
+    '<div class="grp">Работы сдал:<\/div>' +
+    '<div class="sg2"><span>Исполнитель (' + esc(a.exe) + ')' + (a.giver ? ' ' + esc(a.giver) : '') + '<\/span><span class="ln2"><\/span><\/div>';
+}
+function makePdf(a) {
+  var el = $('sheet'); el.innerHTML = sheetHtml(a);
+  return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
+    var pdf = new jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var pxPerPt = cv.width / pw, pageH = Math.floor(ph * pxPerPt), y = 0, first = true;
+    while (y < cv.height) {
+      var h = Math.min(pageH, cv.height - y), c = document.createElement('canvas');
+      c.width = cv.width; c.height = h; c.getContext('2d').drawImage(cv, 0, y, cv.width, h, 0, 0, cv.width, h);
+      if (!first) pdf.addPage();
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pw, h / pxPerPt);
+      y += h; first = false;
+    }
+    return pdf.output('blob');
+  });
+}
+
+/* ---------- Word ---------- */
+function makeDocx(a) {
+  var D = docx, TNR = 'Arial';
+  function run(t, o) { o = o || {}; return new D.TextRun({ text: String(t == null ? '' : t), bold: o.b, italics: o.i, font: TNR, size: (o.s || 11) * 2 }); }
+  function para(runs, al, after) { return new D.Paragraph({ children: runs, alignment: al || D.AlignmentType.LEFT, spacing: { after: after == null ? 0 : after } }); }
+  var NB = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' }, NOB = { top: NB, bottom: NB, left: NB, right: NB, insideHorizontal: NB, insideVertical: NB };
+  var ln = { style: D.BorderStyle.SINGLE, size: 6, color: '000000' }, B = { top: ln, bottom: ln, left: ln, right: ln, insideHorizontal: ln, insideVertical: ln };
+  function cell(t, o) { o = o || {}; return new D.TableCell({ width: { size: o.w || 1000, type: D.WidthType.DXA }, verticalAlign: D.VerticalAlign.CENTER, margins: { top: 50, bottom: 50, left: 80, right: 80 }, children: [para([run(t, { b: o.b, s: 10.5 })], o.al || D.AlignmentType.CENTER)] }); }
+  var W = [500, 4400, 900, 900, 1100, 1500];
+  var apLines = [];
+  a.approve.forEach(function (x, i) { if (!i) apLines.push(para([run('Утверждаю', { b: true })])); apLines.push(para([run(x.role + ' ____________ ' + x.name, { b: true })], null, 160)); });
+  var head = new D.Table({ borders: NOB, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: [4300, 5000], rows: [new D.TableRow({ children: [new D.TableCell({ width: { size: 4300, type: D.WidthType.DXA }, children: [para([run('')])] }), new D.TableCell({ width: { size: 5000, type: D.WidthType.DXA }, children: apLines })] })] });
+  var trs = [new D.TableRow({ tableHeader: true, children: ['№ п/п', 'Наименование работ', 'Ед. изм.', 'Кол-во', 'Стоимость работы', 'Итого'].map(function (t, i) { return cell(t, { b: true, w: W[i] }); }) })];
+  a.rows.forEach(function (r, i) {
+    trs.push(new D.TableRow({ children: [cell(i + 1, { w: W[0] }), cell(r.name, { w: W[1], al: D.AlignmentType.LEFT }), cell(r.unit, { w: W[2] }), cell(fmt(r.qty), { w: W[3] }), cell(fmt(r.price), { w: W[4] }), cell(fmt(r.sum), { w: W[5], b: true })] }));
+  });
+  if (a.taxOn) [['Итого без налога', a.net], ['Единый налог 4%', a.tax]].forEach(function (x) { trs.push(new D.TableRow({ children: [cell('', { w: W[0] }), cell(x[0], { w: W[1], al: D.AlignmentType.LEFT }), cell('', { w: W[2] }), cell('', { w: W[3] }), cell('', { w: W[4] }), cell(fmt(x[1]), { w: W[5] })] })); });
+  trs.push(new D.TableRow({ children: [cell('', { w: W[0] }), cell('Итого', { w: W[1], b: true, al: D.AlignmentType.LEFT }), cell('', { w: W[2] }), cell('', { w: W[3] }), cell('', { w: W[4] }), cell(fmt(a.total), { w: W[5], b: true })] }));
+  var works = new D.Table({ borders: B, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: W, rows: trs });
+  var sg = [['Работы приняли:', '', '']];
+  a.accept.forEach(function (x) { sg.push([x.role, '____________', x.name]); });
+  sg.push(['', '', '']); sg.push(['Работы сдал:', '', '']); sg.push(['Исполнитель (' + a.exe + ')' + (a.giver ? ' ' + a.giver : ''), '', '____________']);
+  var SW = [3600, 2000, 3700];
+  var sigT = new D.Table({ borders: NOB, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: SW, rows: sg.map(function (r) { return new D.TableRow({ children: r.map(function (t, i) { return new D.TableCell({ width: { size: SW[i], type: D.WidthType.DXA }, children: [para([run(t, { b: true })], i === 2 ? D.AlignmentType.RIGHT : D.AlignmentType.LEFT)] }); }) }); }) });
+  var C = D.AlignmentType.CENTER;
+  var doc = new D.Document({
+    styles: { default: { document: { run: { font: TNR, size: 22 } } } },
+    sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 720, bottom: 720, left: 1134, right: 720 } } },
+      children: [head, para([run('')]),
+        para([run('по объекту: ', { i: true }), run(a.obj, { b: true })], C, 160),
+        para([run(a.head, { b: true, s: 12 })], C),
+        para([run(a.date)], D.AlignmentType.RIGHT, 80),
+        works,
+        para([run('Всего выполнено работ на сумму: '), run(words(a.total), { b: true })], null, 200),
+        para([run('')]), sigT] }]
+  });
+  return D.Packer.toBlob(doc);
+}
+
+/* ---------- предпросмотр ---------- */
+var pvT = null;
+function preview() {
+  clearTimeout(pvT);
+  pvT = setTimeout(function () {
+    var a = gather();
+    a.rows = a.rows.map(function (r) { return { name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: isNaN(r.sum) ? 0 : r.sum }; });
+    a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
+    $('pv').innerHTML = sheetHtml(a);
+    var w = $('pvBox').clientWidth, k = Math.min(1, w / 794);
+    $('pv').style.transform = 'scale(' + k + ')';
+    $('pvBox').style.height = Math.ceil($('pv').offsetHeight * k) + 'px';
+  }, 120);
+}
+document.addEventListener('input', preview);
+document.addEventListener('change', preview);
+document.addEventListener('click', function (e) { if (e.target.closest('button')) preview(); });
+window.addEventListener('resize', preview);
+
+/* ---------- кнопки ---------- */
+function save(blob, name) {
+  var u = URL.createObjectURL(blob), l = document.createElement('a');
+  l.href = u; l.download = name; document.body.appendChild(l); l.click(); l.remove();
+  setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+}
+function busy(b, on, t) { b.disabled = on; if (t) b.textContent = t; }
+$('pdf').addEventListener('click', function () {
+  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю PDF…');
+  makePdf(a).then(function (bl) { save(bl, a.file + '.pdf'); $('ok').textContent = 'PDF скачан: ' + a.file + '.pdf'; })
+    .catch(function (e) { $('err').textContent = 'PDF не получился: ' + e; }).then(function () { busy(b, false, 'Скачать PDF'); });
+});
+$('word').addEventListener('click', function () {
+  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю Word…');
+  makeDocx(a).then(function (bl) { save(bl, a.file + '.docx'); $('ok').textContent = 'Word скачан: ' + a.file + '.docx'; })
+    .catch(function (e) { $('err').textContent = 'Word не получился: ' + e; }).then(function () { busy(b, false, 'Скачать Word'); });
+});
+$('share').addEventListener('click', function () {
+  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю файлы…');
+  Promise.all([makePdf(a), makeDocx(a)]).then(function (bl) {
+    var files = [new File([bl[0]], a.file + '.pdf', { type: 'application/pdf' }), new File([bl[1]], a.file + '.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })];
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      return navigator.share({ files: files, title: a.file, text: a.file + ', сумма ' + fmt(a.total) + ' сом' }).then(function () { $('ok').textContent = 'Отправлено.'; }).catch(function () {});
+    }
+    save(bl[0], files[0].name); save(bl[1], files[1].name);
+    $('ok').textContent = 'На этом устройстве нельзя отправить напрямую — PDF и Word скачаны, прикрепите их в WhatsApp или Telegram.';
+  }).catch(function (e) { $('err').textContent = 'Ошибка: ' + e; }).then(function () { busy(b, false, 'Отправить в WhatsApp / Telegram'); });
+});
+preview();
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#7c2a20">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>АВР — Нурзаман</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js"></script>
+<style>
+:root{--bg:#f3ecdf;--card:#fbf7ef;--ink:#2a2018;--muted:#7a6c5c;--line:#e0d4c0;--acc:#7c2a20;--acc2:#f6e9dc;--warn:#a33b2b}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Montserrat,Arial,Helvetica,sans-serif}
+header{background:#2a2018;color:#fff;padding:14px 16px}
+header b{font-size:19px}
+header small{display:block;font-size:12.5px;opacity:.85;margin-top:2px}
+.wrap{max-width:760px;margin:0 auto;padding:12px 12px 48px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+.step{font-weight:bold;color:var(--acc);margin:0 0 8px}
+label{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 4px}
+input,select,textarea{font:inherit;width:100%;padding:10px;border:1px solid #b9c4bb;border-radius:8px;background:#fff;color:var(--ink);min-width:0}
+input:focus,textarea:focus{outline:2px solid #9cc7b3;border-color:var(--acc)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.muted{color:var(--muted);font-size:13px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid #b9c4bb;background:#fff;color:var(--ink);padding:10px 14px}
+button:disabled{opacity:.55;cursor:default}
+/* поиск */
+.list{border:1px solid var(--line);border-radius:10px;margin-top:6px;max-height:340px;overflow:auto;display:none;background:#fff}
+.opt{padding:9px 11px;border-bottom:1px solid #edf0ed;cursor:pointer}
+.opt:hover,.opt.on{background:var(--acc2)}
+.opt b{display:block}
+.opt .d{font-size:13px;color:#3b463f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.opt i{font-size:12px;color:var(--muted)}
+/* договор */
+.ctr{display:none;background:var(--acc2);border:1.5px solid var(--acc)}
+.ctr h3{margin:0 0 4px;font-size:16px}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.links a{display:inline-block;text-decoration:none;background:#fff;border:1px solid var(--acc);color:var(--acc);border-radius:8px;padding:8px 12px;font-weight:bold}
+.lines{margin-top:6px;display:grid;gap:6px}
+.ln{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+.ln .t{font-size:13.5px;white-space:pre-wrap}
+.ln .t small{display:block;color:var(--muted);font-size:12px}
+.ln button{padding:7px 10px;white-space:nowrap}
+/* работы */
+.w{border:1px solid var(--line);border-radius:10px;padding:10px;margin-top:10px}
+.w .top{display:flex;gap:8px;align-items:center}
+.w .top input{flex:1}
+.w .nums{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.w .sum{text-align:right;font-weight:bold;margin-top:6px}
+.x{border:0;background:none;font-size:22px;color:var(--muted);padding:0 6px}
+.add{width:100%;margin-top:10px;border-style:dashed}
+.total{display:flex;justify-content:space-between;font-size:18px;font-weight:bold;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
+details summary{cursor:pointer;color:var(--acc);font-weight:bold}
+.sg{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;margin-top:6px}
+.sgh{font-size:12px;color:var(--muted);margin-top:10px;font-weight:bold}
+.go{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.go button{padding:14px;font-weight:bold;font-size:16px}
+.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.share{grid-column:1/-1;background:#1f9e57;border-color:#1f9e57;color:#fff}
+.step i{font-family:Georgia,serif;margin-right:4px}
+.tax{display:flex;gap:8px;align-items:center;margin-top:12px;font-size:14px;color:var(--ink)}.tax input{width:auto}
+.err{color:var(--warn);margin-top:8px}
+.ok{color:var(--acc);margin-top:8px}
+/* лист A4 для PDF */
 #sheet{position:fixed;left:-10000px;top:0;width:794px;background:#fff;color:#000;padding:56px 60px;font:13px/1.4 Montserrat,Arial,sans-serif}
 #sheet .ap{margin-left:auto;width:55%}
 #sheet .ap .h{font-weight:700;margin-bottom:12px}
