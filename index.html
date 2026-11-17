@@ -69,18 +69,20 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 .a4{width:794px;min-height:1123px;background:#fff;color:#000;padding:56px 60px;font:13px/1.4 Montserrat,Arial,sans-serif;box-sizing:border-box}
 #pvBox{overflow:hidden;border:1px solid var(--line);border-radius:8px;background:#fff}
 #pv{transform-origin:top left}
-.a4 .ap{margin-left:auto;width:55%}
+.a4 .ap{margin-left:auto;width:max-content;max-width:62%}
 .a4 .ap .h{font-weight:700;margin-bottom:12px}
-.a4 .pl{display:flex;align-items:flex-end;gap:8px;margin:0 0 14px}
-.a4 .pl .ln2{flex:1;border-bottom:1px solid #000;margin:0 4px 4px;min-width:60px}
+.a4 .pl{display:grid;grid-template-columns:118px 96px auto;column-gap:8px;align-items:end;margin:0 0 12px}
+.a4 .pl .nm,.a4 .sg2 .nm{white-space:nowrap}
+.a4 .pl .ln2{border-bottom:1px solid #000;margin-bottom:4px}
 .a4 .c{text-align:center}.a4 .r{text-align:right}
 .a4 table{width:100%;border-collapse:collapse;margin-top:16px}
 .a4 th,.a4 td{border:1px solid #000;padding:6px;font-size:12.5px}
 .a4 th{font-weight:700;text-align:center}
 .a4 td{text-align:center}.a4 td.l{text-align:left}.a4 td.n{text-align:right}
 .a4 .grp{font-style:italic;margin:26px 0 10px}
-.a4 .sg2{display:flex;align-items:flex-end;margin:0 0 14px;font-weight:700}
-.a4 .sg2 .ln2{flex:1;max-width:120px;border-bottom:1px solid #000;margin:0 8px 4px auto}
+.a4 .sg2{display:grid;grid-template-columns:1fr 120px auto;column-gap:10px;align-items:end;margin:0 0 14px;font-weight:700}
+.a4 .sg2 .ln2{border-bottom:1px solid #000;margin-bottom:4px}
+@media print{@page{size:A4;margin:0}body *{visibility:hidden}#sheet,#sheet *{visibility:visible}#sheet{position:absolute;left:0;top:0}}
 </style>
 </head>
 <body>
@@ -132,8 +134,9 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 
 <p class="step" style="margin-top:4px"><i>VI.</i> Печать</p>
 <div class="go">
-  <button class="pri" id="pdf" type="button">Скачать PDF</button>
-  <button class="pri" id="word" type="button">Скачать Word</button>
+  <button class="pri" id="pdf" type="button">Сохранить акт (Word + PDF)</button>
+  <button class="pri" id="print" type="button">Печать</button>
+  <button id="word" type="button" style="grid-column:1/-1">Только Word (для правки)</button>
   <button class="share" id="share" type="button">Отправить в WhatsApp / Telegram</button>
 </div>
 <div class="err" id="err"></div>
@@ -373,13 +376,13 @@ function collect() {
 
 /* ---------- PDF ---------- */
 function sheetHtml(a) {
-  var ap = a.approve.map(function (x) { return '<div class="pl"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span>' + esc(x.name) + '<\/span><\/div>'; }).join('');
+  var ap = a.approve.map(function (x) { return '<div class="pl"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
   var rows = a.rows.map(function (r, i) { return '<tr><td>' + (i + 1) + '<\/td><td class="l">' + esc(r.name) + '<\/td><td>' + esc(r.unit) + '<\/td><td>' + fmt(r.qty) + '<\/td><td class="n">' + fmt(r.price) + '<\/td><td class="n"><b>' + fmt(r.sum) + '<\/b><\/td><\/tr>'; }).join('');
   var foot = a.taxOn
     ? '<tr><td colspan="5" class="n">Итого без налога<\/td><td class="n">' + fmt(a.net) + '<\/td><\/tr><tr><td colspan="5" class="n">Единый налог 4%<\/td><td class="n">' + fmt(a.tax) + '<\/td><\/tr>'
     : '';
   foot += '<tr><td colspan="5" class="n"><b>Итого<\/b><\/td><td class="n"><b>' + fmt(a.total) + '<\/b><\/td><\/tr>';
-  var acc = a.accept.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span>' + esc(x.name) + '<\/span><\/div>'; }).join('');
+  var acc = a.accept.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
   if (isNaN(a.total)) a.total = 0;
   return '<div class="ap"><div class="h">Утверждаю<\/div>' + ap + '<\/div>' +
     '<p class="c" style="margin:22px 0 0"><i>по объекту: ' + esc(a.obj) + '<\/i><\/p>' +
@@ -389,7 +392,7 @@ function sheetHtml(a) {
     '<p style="margin-top:22px">Всего выполнено работ на сумму: ' + esc(words(a.total)) + '<\/p>' +
     '<div class="grp">Работы приняли:<\/div>' + acc +
     '<div class="grp">Работы сдал:<\/div>' +
-    '<div class="sg2"><span>Исполнитель (' + esc(a.exe) + ')' + (a.giver ? ' ' + esc(a.giver) : '') + '<\/span><span class="ln2"><\/span><\/div>';
+    '<div class="sg2"><span>Исполнитель<\/span><span class="ln2"><\/span><span class="nm">' + esc(a.exe) + (a.giver ? ', ' + esc(a.giver) : '') + '<\/span><\/div>';
 }
 function makePdf(a) {
   var el = $('sheet'); el.innerHTML = sheetHtml(a);
@@ -416,10 +419,19 @@ function makeDocx(a) {
   var NB = { style: D.BorderStyle.NONE, size: 0, color: 'FFFFFF' }, NOB = { top: NB, bottom: NB, left: NB, right: NB, insideHorizontal: NB, insideVertical: NB };
   var ln = { style: D.BorderStyle.SINGLE, size: 6, color: '000000' }, B = { top: ln, bottom: ln, left: ln, right: ln, insideHorizontal: ln, insideVertical: ln };
   function cell(t, o) { o = o || {}; return new D.TableCell({ width: { size: o.w || 1000, type: D.WidthType.DXA }, verticalAlign: D.VerticalAlign.CENTER, margins: { top: 50, bottom: 50, left: 80, right: 80 }, children: [para([run(t, { b: o.b, s: 10.5 })], o.al || D.AlignmentType.CENTER)] }); }
-  var W = [500, 4400, 900, 900, 1100, 1500];
+  var W = [500, 4000, 800, 800, 1600, 1600];
   var apLines = [];
-  a.approve.forEach(function (x, i) { if (!i) apLines.push(para([run('Утверждаю', { b: true })])); apLines.push(para([run(x.role + ' ____________ ' + x.name, { b: true })], null, 160)); });
-  var head = new D.Table({ borders: NOB, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: [4300, 5000], rows: [new D.TableRow({ children: [new D.TableCell({ width: { size: 4300, type: D.WidthType.DXA }, children: [para([run('')])] }), new D.TableCell({ width: { size: 5000, type: D.WidthType.DXA }, children: apLines })] })] });
+  var UL = { top: NB, left: NB, right: NB, bottom: { style: D.BorderStyle.SINGLE, size: 6, color: '000000' } };
+  function sigRow(cols, texts, bold) {
+    return new D.TableRow({ children: texts.map(function (t, i) {
+      return new D.TableCell({ width: { size: cols[i], type: D.WidthType.DXA }, verticalAlign: D.VerticalAlign.BOTTOM, borders: i === 1 && t === '__' ? UL : { top: NB, left: NB, right: NB, bottom: NB }, margins: { top: 60, bottom: 20, left: 60, right: 60 },
+        children: [para([run(t === '__' ? '' : t, { b: bold })], i === 2 ? D.AlignmentType.RIGHT : D.AlignmentType.LEFT)] });
+    }) });
+  }
+  var AW = [1700, 1100, 3300];
+  var apRows = [new D.TableRow({ children: [new D.TableCell({ columnSpan: 3, width: { size: 6100, type: D.WidthType.DXA }, borders: { top: NB, left: NB, right: NB, bottom: NB }, children: [para([run('Утверждаю', { b: true })], null, 80)] })] })];
+  a.approve.forEach(function (x) { apRows.push(sigRow(AW, [x.role, '__', x.name], false)); });
+  var head = new D.Table({ borders: NOB, alignment: D.AlignmentType.RIGHT, width: { size: 6100, type: D.WidthType.DXA }, columnWidths: AW, rows: apRows });
   var trs = [new D.TableRow({ tableHeader: true, children: ['№ п/п', 'Наименование работ', 'Ед. изм.', 'Кол-во', 'Стоимость работы', 'Итого'].map(function (t, i) { return cell(t, { b: true, w: W[i] }); }) })];
   a.rows.forEach(function (r, i) {
     trs.push(new D.TableRow({ children: [cell(i + 1, { w: W[0] }), cell(r.name, { w: W[1], al: D.AlignmentType.LEFT }), cell(r.unit, { w: W[2] }), cell(fmt(r.qty), { w: W[3] }), cell(fmt(r.price), { w: W[4] }), cell(fmt(r.sum), { w: W[5], b: true })] }));
@@ -427,11 +439,13 @@ function makeDocx(a) {
   if (a.taxOn) [['Итого без налога', a.net], ['Единый налог 4%', a.tax]].forEach(function (x) { trs.push(new D.TableRow({ children: [cell('', { w: W[0] }), cell(x[0], { w: W[1], al: D.AlignmentType.LEFT }), cell('', { w: W[2] }), cell('', { w: W[3] }), cell('', { w: W[4] }), cell(fmt(x[1]), { w: W[5] })] })); });
   trs.push(new D.TableRow({ children: [cell('', { w: W[0] }), cell('Итого', { w: W[1], b: true, al: D.AlignmentType.LEFT }), cell('', { w: W[2] }), cell('', { w: W[3] }), cell('', { w: W[4] }), cell(fmt(a.total), { w: W[5], b: true })] }));
   var works = new D.Table({ borders: B, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: W, rows: trs });
-  var sg = [['Работы приняли:', '', '']];
-  a.accept.forEach(function (x) { sg.push([x.role, '____________', x.name]); });
-  sg.push(['', '', '']); sg.push(['Работы сдал:', '', '']); sg.push(['Исполнитель (' + a.exe + ')' + (a.giver ? ' ' + a.giver : ''), '', '____________']);
-  var SW = [3600, 2000, 3700];
-  var sigT = new D.Table({ borders: NOB, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: SW, rows: sg.map(function (r) { return new D.TableRow({ children: r.map(function (t, i) { return new D.TableCell({ width: { size: SW[i], type: D.WidthType.DXA }, children: [para([run(t, { b: true })], i === 2 ? D.AlignmentType.RIGHT : D.AlignmentType.LEFT)] }); }) }); }) });
+  var SW = [3800, 1900, 3600];
+  function lab(t) { return new D.TableRow({ children: [new D.TableCell({ columnSpan: 3, width: { size: 9300, type: D.WidthType.DXA }, borders: { top: NB, left: NB, right: NB, bottom: NB }, margins: { top: 200, bottom: 60 }, children: [para([run(t, { i: true })])] })] }); }
+  var sg = [lab('Работы приняли:')];
+  a.accept.forEach(function (x) { sg.push(sigRow(SW, [x.role, '__', x.name], true)); });
+  sg.push(lab('Работы сдал:'));
+  sg.push(sigRow(SW, ['Исполнитель', '__', a.exe + (a.giver ? ', ' + a.giver : '')], true));
+  var sigT = new D.Table({ borders: NOB, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: SW, rows: sg });
   var C = D.AlignmentType.CENTER;
   var doc = new D.Document({
     styles: { default: { document: { run: { font: TNR, size: 22 } } } },
@@ -441,7 +455,7 @@ function makeDocx(a) {
         para([run(a.head, { b: true, s: 12 })], C),
         para([run(a.date)], D.AlignmentType.RIGHT, 80),
         works,
-        para([run('Всего выполнено работ на сумму: '), run(words(a.total), { b: true })], null, 200),
+        new D.Paragraph({ children: [run('Всего выполнено работ на сумму: '), run(words(a.total), { b: true })], spacing: { before: 200, after: 200 } }),
         para([run('')]), sigT] }]
   });
   return D.Packer.toBlob(doc);
@@ -467,6 +481,11 @@ document.addEventListener('click', function (e) { if (e.target.closest('button')
 window.addEventListener('resize', preview);
 
 /* ---------- кнопки ---------- */
+$('print').addEventListener('click', function () {
+  var a = collect(); if (!a) return;
+  $('sheet').innerHTML = sheetHtml(a);
+  setTimeout(function () { window.print(); }, 200);
+});
 function save(blob, name) {
   var u = URL.createObjectURL(blob), l = document.createElement('a');
   l.href = u; l.download = name; document.body.appendChild(l); l.click(); l.remove();
@@ -474,14 +493,16 @@ function save(blob, name) {
 }
 function busy(b, on, t) { b.disabled = on; if (t) b.textContent = t; }
 $('pdf').addEventListener('click', function () {
-  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю PDF…');
-  makePdf(a).then(function (bl) { save(bl, a.file + '.pdf'); $('ok').textContent = 'PDF скачан: ' + a.file + '.pdf'; })
-    .catch(function (e) { $('err').textContent = 'PDF не получился: ' + e; }).then(function () { busy(b, false, 'Скачать PDF'); });
+  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю Word и PDF…');
+  Promise.all([makeDocx(a), makePdf(a)]).then(function (bl) {
+    save(bl[0], a.file + '.docx'); setTimeout(function () { save(bl[1], a.file + '.pdf'); }, 400);
+    $('ok').textContent = 'Сохранено: ' + a.file + '.docx (можно править в Word) и .pdf';
+  }).catch(function (e) { $('err').textContent = 'Не получилось: ' + e; }).then(function () { busy(b, false, 'Сохранить акт (Word + PDF)'); });
 });
 $('word').addEventListener('click', function () {
   var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю Word…');
   makeDocx(a).then(function (bl) { save(bl, a.file + '.docx'); $('ok').textContent = 'Word скачан: ' + a.file + '.docx'; })
-    .catch(function (e) { $('err').textContent = 'Word не получился: ' + e; }).then(function () { busy(b, false, 'Скачать Word'); });
+    .catch(function (e) { $('err').textContent = 'Word не получился: ' + e; }).then(function () { busy(b, false, 'Только Word (для правки)'); });
 });
 $('share').addEventListener('click', function () {
   var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю файлы…');
