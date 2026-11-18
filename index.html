@@ -38,6 +38,7 @@ button:disabled{opacity:.55;cursor:default}
 .opt .d{font-size:13px;color:#3b463f;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .opt i{font-size:12px;color:var(--muted)}
 /* договор */
+.prev{display:none;margin-top:10px;padding:10px;border:1.5px dashed var(--acc);border-radius:10px;background:#fff;font-size:13px}.prev .up{color:var(--warn);font-weight:bold;margin:0 0 6px}.prev table{width:100%;border-collapse:collapse}.prev td{border-bottom:1px solid var(--line);padding:4px}.prev td.n{text-align:right;white-space:nowrap}.prev button{margin-top:8px}
 .ctr{display:none;background:var(--acc2);border:1.5px solid var(--acc)}
 .ctr h3{margin:0 0 4px;font-size:16px}
 .links{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
@@ -117,7 +118,12 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
     <div><label for="num">На основании договора №</label><input id="num"></div>
     <div><label for="date">Дата акта</label><input id="date" type="date"></div>
   </div>
-  <label for="obj">Объект</label><input id="obj">
+  <label for="obj">Объект (можно выбрать из списка)</label><input id="obj" list="objList" autocomplete="off"><datalist id="objList"></datalist>
+  <div class="row2">
+    <div><label for="blk">Блок</label><input id="blk" list="blkList" autocomplete="off" placeholder="например 2 или А"><datalist id="blkList"></datalist></div>
+    <div><label for="flr">Этаж</label><input id="flr" inputmode="numeric" placeholder="например 5"></div>
+  </div>
+  <div class="prev" id="prev"></div>
   <label for="exe">Исполнитель — ФИО подрядчика (подставляется сам, можно изменить)</label><input id="exe" placeholder="ИП Фамилия Имя Отчество">
   <label for="title">Описание работ (после слов «Акт выполненных работ», берётся из договора)</label><input id="title" placeholder="можно оставить пустым">
 </div>
@@ -210,7 +216,14 @@ function cells(r) {
   if (!r || !r.table) return [];
   return r.table.rows.map(function (row) { return (row.c || []).map(function (c) { return c ? (c.f != null ? c.f : (c.v == null ? '' : c.v)) : ''; }); });
 }
-var need = 3, RAW = null;
+var need = 3, RAW = null, LOG = [];
+function loadLog(done) {
+  gviz('sheet=' + encodeURIComponent('Журнал АВР') + '&headers=1&tq=' + encodeURIComponent('select A,B,C,D,E,F,G,H,I,J,K'), function (r) {
+    LOG = cells(r).map(function (x) { var w = []; try { w = JSON.parse(x[8] || '[]'); } catch (e) {} return { key: x[0], date: x[1], num: String(x[2]), exe: x[3], obj: x[4], blk: String(x[5]), flr: String(x[6]), total: num(x[7]), rows: w, at: String(x[9]), sig: (function () { try { return JSON.parse(x[10] || 'null'); } catch (e) { return null; } })() }; }).filter(function (x) { return x.num; });
+    if (done) done();
+  });
+}
+loadLog(function () { showPrev(); fillLists(); });
 function part() { if (--need === 0) build(); }
 gviz('gid=0&headers=1&tq=' + encodeURIComponent('select A,B,C,D,E,F'), function (r) { RAW = cells(r); part(); });
 gviz('sheet=' + encodeURIComponent('Ссылки АВР') + '&headers=1&tq=' + encodeURIComponent('select A,B,C'), function (r) {
@@ -243,7 +256,18 @@ function build() {
   CONTRACTS.sort(function (x, y) { return y.row - x.row; });
   var ppl = {}; CONTRACTS.forEach(function (k) { ppl[k.who] = 1; });
   $('st').textContent = 'Договоров: ' + CONTRACTS.length + ', подрядчиков: ' + Object.keys(ppl).length;
+  fillLists();
 }
+/* ---------- списки объектов и блоков ---------- */
+function opts(list) { var seen = {}, out = []; list.forEach(function (v) { v = String(v || '').trim(); var k = okey(v); if (v && !seen[k]) { seen[k] = 1; out.push(v); } }); return out.sort(function (a, b) { return a.localeCompare(b, 'ru'); }).map(function (v) { return '<option value="' + esc(v) + '">'; }).join(''); }
+function fillLists() {
+  var objs = (window.CONTRACTS || []).map(function (k) { return k.obj; }).concat(LOG.map(function (x) { return x.obj; }));
+  $('objList').innerHTML = opts(objs);
+  var o = okey($('obj').value);
+  $('blkList').innerHTML = opts(LOG.filter(function (x) { return !o || okey(x.obj) === o; }).map(function (x) { return x.blk; }));
+}
+$('obj').addEventListener('change', function () { fillLists(); loadSig(); });
+$('blk').addEventListener('change', function () { loadSig(); });
 
 /* ---------- поиск ---------- */
 var HITS = [];
@@ -308,6 +332,7 @@ function pick(k) {
   EXTRA = false; showMode();
   ROWS = []; addRow();
   loadSig();
+  showPrev();
 }
 function descr(k) {
   var t = String(k.title || '').replace(/\s+[-–—]\s+\d[\s\S]*$/, '').trim();
@@ -380,8 +405,19 @@ function words(n) {
 }
 
 /* ---------- подписи ---------- */
-function loadSig() { var s = store('avr3_sig_' + okey($('obj').value)) || store('avr3_sig_default'); SIG = JSON.parse(JSON.stringify(s || DEF_SIG)); renderSig(); }
-function saveSig() { store('avr3_sig_' + okey($('obj').value), SIG); store('avr3_sig_default', SIG); }
+function logSig(o, b) {
+  var L = (typeof LOG === 'undefined' ? [] : LOG).filter(function (x) { return x.sig && okey(x.obj) === o && (b === null || okey(x.blk) === b); });
+  L.sort(function (x, y) { return (dkey(x.date) + x.at) < (dkey(y.date) + y.at) ? -1 : 1; });
+  return L.length ? L[L.length - 1].sig : null;
+}
+function loadSig() {
+  var o = okey($('obj').value), b = okey($('blk').value);
+  var s = (b && (logSig(o, b) || store('avr3_sig_' + o + '|' + b))) || logSig(o, null) || store('avr3_sig_' + o) || store('avr3_sig_default');
+  SIG = JSON.parse(JSON.stringify(s || DEF_SIG));
+  if (!SIG.approve || !SIG.accept) SIG = JSON.parse(JSON.stringify(DEF_SIG));
+  renderSig();
+}
+function saveSig() { var o = okey($('obj').value), b = okey($('blk').value); if (b) store('avr3_sig_' + o + '|' + b, SIG); store('avr3_sig_' + o, SIG); store('avr3_sig_default', SIG); }
 function renderSig() {
   function line(g, x, i) { return '<div class="sg"><input data-g="' + g + '" data-i="' + i + '" data-k="role" value="' + esc(x.role) + '" placeholder="Должность"><input data-g="' + g + '" data-i="' + i + '" data-k="name" value="' + esc(x.name) + '" placeholder="ФИО"><button class="x" type="button" data-sg="' + g + '" data-si="' + i + '">×<\/button><\/div>'; }
   var h = '<div class="sgh">II. УТВЕРЖДАЮ<\/div>';
@@ -397,15 +433,50 @@ $('addAc').addEventListener('click', function () { SIG.accept.push({ role: 'Ма
 $('obj').addEventListener('change', loadSig);
 
 /* ---------- данные акта ---------- */
+/* ---------- прошлый АВР по договору / блоку ---------- */
+function flrN(s) { var m = String(s || '').match(/-?\d+/); return m ? +m[0] : NaN; }
+function dkey(d) { var p = String(d || '').split('.'); return p.length === 3 ? p[2] + p[1] + p[0] : ''; }
+var PREV = null;
+function showPrev() {
+  var box = $('prev'), n = okey($('num').value), b = okey($('blk').value), f = flrN($('flr').value);
+  PREV = null;
+  if (!n) { box.style.display = 'none'; return; }
+  var all = LOG.filter(function (x) { return okey(x.num) === n; });
+  var same = b ? all.filter(function (x) { return okey(x.blk) === b; }) : all;
+  same.sort(function (x, y) { return (dkey(x.date) + x.at) < (dkey(y.date) + y.at) ? -1 : 1; });
+  var p = same[same.length - 1];
+  if (!p) { box.style.display = all.length || b ? 'block' : 'none'; box.innerHTML = '<span class="muted">' + (b && all.length ? 'По блоку «' + esc($('blk').value) + '» прошлых АВР нет (по договору — ' + all.length + ').' : 'Прошлых АВР по этому договору в журнале нет.') + '<\/span>'; return; }
+  PREV = p;
+  var pf = flrN(p.flr), h = '';
+  if (!isNaN(f) && !isNaN(pf) && f > pf) h += '<p class="up">Этаж ' + f + ' выше прошлого (' + pf + '). В прошлом АВР было:<\/p>';
+  else if (!isNaN(f) && !isNaN(pf) && f === pf) h += '<p class="up">На этаж ' + f + ' уже был АВР:<\/p>';
+  h += '<b>Последний АВР' + (p.blk ? ', блок ' + esc(p.blk) : '') + (p.flr ? ', этаж ' + esc(p.flr) : '') + '<\/b> — от ' + esc(p.date) + '<table>';
+  p.rows.forEach(function (r) { h += '<tr><td>' + esc(r.name) + (r.extra ? ' <small>(доп.)<\/small>' : '') + '<\/td><td class="n">' + fmt(r.qty) + ' ' + esc(r.unit || '') + '<\/td><td class="n">' + fmt(r.sum) + '<\/td><\/tr>'; });
+  h += '<tr><td colspan="2"><b>Сумма<\/b><\/td><td class="n"><b>' + fmt(p.total) + '<\/b><\/td><\/tr><\/table>';
+  var tot = 0; all.forEach(function (x) { if (!isNaN(x.total)) tot += x.total; });
+  if (all.length > 1) h += '<div class="muted" style="margin-top:6px">Всего по договору прошлых АВР: ' + all.length + ' на ' + fmt(tot) + '<\/div>';
+  h += '<button type="button" class="add" id="usePrev">Взять те же работы и объёмы<\/button>';
+  box.innerHTML = h; box.style.display = 'block';
+}
+$('blk').addEventListener('input', showPrev);
+$('flr').addEventListener('input', showPrev);
+$('num').addEventListener('change', showPrev);
+$('prev').addEventListener('click', function (e) {
+  if (!e.target.closest('#usePrev') || !PREV) return;
+  ROWS = PREV.rows.map(function (r) { return { name: r.name, unit: r.unit || 'шт', qty: isNaN(r.qty) || r.qty == null ? '' : r.qty, price: isNaN(r.price) || r.price == null ? '' : r.price, extra: !!r.extra }; });
+  if (!ROWS.length) ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: false });
+  sortRows(); renderRows();
+});
 function ruDate(iso) { if (!iso) return ''; var p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
 (function () { var d = new Date(); $('date').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
 loadSig();
 function gather() {
   var a = {
-    num: $('num').value.trim(), date: ruDate($('date').value), obj: $('obj').value.trim(), title: $('title').value.trim(), giver: $('giver').value.trim(),
+    num: $('num').value.trim(), date: ruDate($('date').value), objBase: $('obj').value.trim(), blk: $('blk').value.trim(), flr: $('flr').value.trim(), title: $('title').value.trim(), giver: $('giver').value.trim(),
     exe: $('exe').value.trim(), approve: SIG.approve.filter(function (x) { return x.role || x.name; }), accept: SIG.accept.filter(function (x) { return x.role || x.name; }),
     rows: ROWS.filter(function (r) { return String(r.name).trim(); }).map(function (r) { return { name: String(r.name).trim(), unit: String(r.unit).trim(), qty: num(r.qty), price: num(r.price), sum: rowSum(r), extra: !!r.extra }; })
   };
+  a.obj = a.objBase + (a.blk ? ', ' + (/^блок/i.test(a.blk) ? a.blk : 'блок ' + a.blk) : '') + (a.flr ? ', ' + (/^\d+$/.test(a.flr) ? a.flr + ' этаж' : a.flr) : '');
   a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.net = Math.round(a.net * 100) / 100;
   a.taxOn = $('tax').checked; a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
   a.head = 'Акт выполненных работ ' + (a.title ? a.title + ' ' : '') + 'на основании договора №' + a.num;
@@ -419,7 +490,7 @@ function collect() {
   if (e) return null;
   saveSig();
   a.work = (a.title || (a.rows[0] && a.rows[0].name) || '').slice(0, 50).trim();
-  a.file = (a.date + ' — АВР №' + a.num + ' — ' + clean(a.exe) + ' — ' + a.work).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  a.file = (a.date + ' — АВР №' + a.num + ' — ' + clean(a.exe) + (a.blk ? ' — бл.' + a.blk : '') + (a.flr ? ' эт.' + a.flr : '') + ' — ' + a.work).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
   return a;
 }
 
@@ -537,10 +608,12 @@ function toDrive(a, docxBlob, pdfBlob) {
   return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
     return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, files: [
       { name: a.file + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: d[0] },
-      { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }] }) });
+      { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }],
+      log: { key: a.file, date: a.date, num: a.num, exe: a.exe, obj: a.objBase, blk: a.blk, flr: a.flr, total: a.total, rows: a.rows, sig: { approve: a.approve, accept: a.accept } } }) });
   }).then(function (r) { return r.json(); }).then(function (j) {
     if (!j || !j.ok) throw new Error(j && j.error || 'нет ответа');
     SENT[key] = j;
+    loadLog(showPrev);
     $('drv').innerHTML = 'Сохранено в Google Диск, папка <b>' + esc(j.folder) + '<\/b>' + (j.folderUrl ? ' — <a href="' + esc(j.folderUrl) + '" target="_blank" rel="noopener">открыть<\/a>' : '');
     return j;
   }).catch(function (e) { $('drv').textContent = 'В Google Диск не сохранилось (' + (e && e.message || e) + '). Файлы на устройстве есть.'; });
