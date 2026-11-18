@@ -272,9 +272,17 @@ function drawAct(r, html) {
     '<div class="card who"><b>Подписи</b>' + r.signers.map(function (p) {
       return '<div>' + (p.st === 'Подписан' ? '✔' : p.st === 'Отклонён' ? '✖' : '⏳') + ' ' + esc(p.role) + ': <b>' + esc(p.name) + '</b>' + (p.at ? ' <span class="muted">' + esc(p.at) + '</span>' : '') + (p.cm ? '<br><i class="muted">Причина: ' + esc(p.cm) + '</i>' : '') + '</div>';
     }).join('') + '</div>' +
-    (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : myTurn ? '<div class="card muted">На компьютере — только просмотр. Подписать или отклонить можно в приложении на телефоне.</div>' : '') +
+    (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : '') +
+    (ME.admin ? '<div style="display:flex;gap:8px"><button class="btn gray" type="button" data-pp="office">🖨 Печать — Офис</button><button class="btn gray" type="button" data-pp="shtab">🖨 Печать — Штаб</button></div><div class="muted" id="ppMsg" style="margin-top:6px"></div>' : '') +
     (ME.admin && r.status === 'Подписан' && !r.pdf ? '<button class="btn gray" id="mkPdf" type="button">Сформировать подписанный PDF</button>' : '');
   var sb = $('sb'); fit(sb); setTimeout(function () { fit(sb); }, 300); window.onresize = function () { fit(sb); };
+  [].forEach.call(document.querySelectorAll('[data-pp]'), function (b) { b.onclick = function () {
+    var t = b.textContent; b.disabled = true; b.textContent = 'Отправляю…';
+    pdfB64(html).then(function (data) { return api({ sign_api: 'act_print', token: ls('sg_token'), id: r.id, place: b.dataset.pp, pdf: data }); })
+      .then(function (j) { $('ppMsg').textContent = 'Отправлено на принтер: ' + j.queued + ' (напечатается, если тот компьютер включён)'; })
+      .catch(function (e) { $('ppMsg').textContent = 'Не получилось: ' + e.message; })
+      .then(function () { b.disabled = false; b.textContent = t; });
+  }; });
   if ($('mkPdf')) $('mkPdf').onclick = function () { this.disabled = true; this.textContent = 'Формирую…'; makeFinal(r.id, html).then(function () { openAct(r.id); }); };
   if (!mineWait) return;
   if (!MOBILE) $('doSign').textContent = '✔ Подписать (подтвердить на телефоне)';
@@ -403,6 +411,17 @@ function showStaff() {
 function sheet(h) { $('mdlIn').innerHTML = h; $('mdl').style.display = 'flex'; }
 function closeSheet() { $('mdl').style.display = 'none'; }
 $('mdl').onclick = function (e) { if (e.target === this && !CONF) closeSheet(); };
+function pdfB64(html) {
+  var el = $('hidden'); el.innerHTML = html;
+  return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
+    var pdf = new jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var k = Math.min(pw / cv.width, ph / cv.height);
+    pdf.addImage(cv.toDataURL('image/jpeg', 0.9), 'JPEG', (pw - cv.width * k) / 2, 0, cv.width * k, cv.height * k);
+    el.innerHTML = '';
+    return pdf.output('datauristring').split(',')[1];
+  });
+}
 function makeFinal(id, html) {
   var el = $('hidden'); el.innerHTML = html;
   return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
