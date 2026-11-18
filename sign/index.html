@@ -199,7 +199,7 @@ var POLL = null;
 function pending(list) { return list.filter(function (r) { return r.status === 'Ожидает' && r.mine && r.mine.st === ''; }); }
 function showInbox() {
   UNLOCKED = true; $('out').style.display = ''; $('hd').textContent = ME.name; $('staffBtn').style.display = ME.admin ? '' : 'none';
-  $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
+  $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="done">Подписано</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
     (!MOBILE ? '' : !('PushManager' in window) ? '<div class="card muted">Чтобы приходили уведомления на iPhone: Safari → «Поделиться» → «На экран „Домой“», затем откройте приложение со значка.</div>'
       : Notification.permission !== 'granted' ? '<button class="btn gray" id="nOn" type="button">🔔 Включить уведомления</button>' : '');
   if ($('nOn')) $('nOn').onclick = function () { var b = this; ensurePush(true).then(function (ok) { if (ok) b.remove(); else b.textContent = 'Уведомления запрещены — разрешите их в настройках телефона'; }); };
@@ -238,10 +238,19 @@ function stLine(r) {
   if (!r.mine || r.mine.view) return '<div class="s">' + (r.mine ? '👁 Только просмотр · ' : '⏳ ') + 'подписано ' + r.done + '/' + r.all + '</div>';
   return '<div class="s w">● Ждёт вашей подписи (' + r.done + '/' + r.all + ')</div>';
 }
+/* «Подписано»: акты, подписанные за последние 24 часа (вами, а если вы не подписант — полностью) */
+function ruTime(s) { var m = String(s || '').match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/); return m ? new Date(+m[3], m[2] - 1, +m[1], +m[4], +m[5]).getTime() : 0; }
+function signedAt(r) {
+  if (r.mine && r.mine.st === 'Подписан') return ruTime(r.mine.at);
+  if (r.status === 'Подписан') return Math.max.apply(null, [0].concat(r.signers.map(function (p) { return ruTime(p.at); })));
+  return 0;
+}
+function recentDone(list) { var now = Date.now(); return list.filter(function (r) { var t = signedAt(r); return t && now - t < 24 * 3600 * 1000; }); }
 function drawList() {
   [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === TAB); });
-  var L = TAB === 'wait' ? pending(ITEMS) : ITEMS;
-  if (!L.length) { $('list').innerHTML = '<div class="center muted">' + (TAB === 'wait' ? 'Новых актов на подпись нет 👍' : 'Пока нет актов') + '</div>'; return; }
+  var P = pending(ITEMS), D = recentDone(ITEMS);
+  var L = TAB === 'wait' ? P : TAB === 'done' ? D : ITEMS.filter(function (r) { return P.indexOf(r) < 0 && D.indexOf(r) < 0; });
+  if (!L.length) { $('list').innerHTML = '<div class="center muted">' + (TAB === 'wait' ? 'Новых актов на подпись нет 👍' : TAB === 'done' ? 'За последние 24 часа подписанных нет' : 'Пока нет актов') + '</div>'; return; }
   $('list').innerHTML = L.map(function (r) {
     var isNew = r.status === 'Ожидает' && r.mine && r.mine.st === '';
     return '<div class="msg' + (isNew ? ' new' : '') + '" data-id="' + esc(r.id) + '"><span class="dot"></span><div class="b">' +
