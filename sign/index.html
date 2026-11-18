@@ -19,6 +19,8 @@ header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:
 header b{font-size:17px;flex:1}
 header button{background:transparent;border:0;color:#fff;font-size:15px;padding:6px}
 main{padding:12px 12px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;margin:0 auto}
+@media (min-width:900px){main{max-width:920px;padding-top:20px}.msg{margin-right:0}.modal{align-items:center;justify-content:center}.modal .in{max-width:520px;border-radius:18px}}
+#inst{display:none;background:#fff;color:var(--acc);border-radius:8px;font-weight:700;font-size:13px;padding:6px 10px}
 .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 input,textarea{width:100%;font:inherit;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0 12px}
 label{font-size:13px;color:var(--muted)}
@@ -67,7 +69,7 @@ button{font:inherit;cursor:pointer}
 </style>
 </head>
 <body>
-<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="out" type="button" style="display:none">Выйти</button></header>
+<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="inst" type="button">⬇ Установить</button><button id="out" type="button" style="display:none">Выйти</button></header>
 <main id="app"><div class="center muted">Загрузка…</div></main>
 <div class="modal" id="mdl"><div class="in" id="mdlIn"></div></div>
 <div id="hidden" class="a4"></div>
@@ -75,6 +77,7 @@ button{font:inherit;cursor:pointer}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
+var VAPID_PUB = 'BE2oHIVgxqCbzGb1XQMZjBWByXWigMvKHyElsqIwOJTCrVjynSghusXSB6mTUpNQ71AOdq2H17MshOHFDb1yNuU';
 var API = 'https://script.google.com/macros/s/AKfycbxFp_OBRiSddYr_LuvVpFf4MkXF4YE1vnkpNKBNdEw4RH4u40My3YzzFAHMRdcI3KR3/exec';
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -88,11 +91,29 @@ function api(body) {
 var ME = null, ITEMS = [], TAB = 'wait', UNLOCKED = false, HIDDEN_AT = 0;
 try { ME = JSON.parse(ls('sg_me') || 'null'); } catch (e) {}
 
-/* ---------- только телефон ---------- */
+/* ---------- телефон и компьютер ---------- */
 var MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-if (!MOBILE) {
-  $('app').innerHTML = '<div class="card center"><h3>Приложение только для телефона</h3><p class="muted">Откройте эту ссылку на телефоне:<br><b>' + esc(location.href.split('?')[0]) + '</b></p></div>';
-} else start();
+var BIO = MOBILE ? 'Face ID / отпечаток' : 'Windows Hello (PIN, лицо или палец)';
+var INST = null;
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); INST = e; $('inst').style.display = 'inline-block'; });
+$('inst').onclick = function () { if (!INST) return; INST.prompt(); INST.userChoice.then(function () { INST = null; $('inst').style.display = 'none'; }); };
+window.addEventListener('appinstalled', function () { $('inst').style.display = 'none'; });
+function devName() { return (MOBILE ? '[mobile] ' : '[pc] ') + navigator.userAgent.slice(0, 110); }
+function saveTok(t) { try { caches.open('avr-sign-auth').then(function (c) { return c.put('./__tok', new Response(t || '')); }); } catch (e) {} }
+function unb64url(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return unb64(s); }
+var PUSHED = false;
+function ensurePush(ask) {
+  if (!MOBILE || PUSHED || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return Promise.resolve(false);
+  var perm = Notification.permission === 'granted' ? Promise.resolve('granted') : ask ? Notification.requestPermission() : Promise.resolve(Notification.permission);
+  return perm.then(function (p) {
+    if (p !== 'granted') return false;
+    return navigator.serviceWorker.ready.then(function (reg) {
+      return reg.pushManager.getSubscription().then(function (sub) { return sub || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: unb64url(VAPID_PUB) }); });
+    }).then(function (sub) { return api({ sign_api: 'push_sub', token: ls('sg_token'), sub: sub.toJSON() }); }).then(function () { PUSHED = true; saveTok(ls('sg_token')); return true; });
+  }).catch(function () { return false; });
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', function () { if (UNLOCKED) load(true); });
+start();
 
 function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
@@ -109,11 +130,11 @@ function showLogin(msg) {
     '<label>Личный код</label><input id="lCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10">' +
     '<button class="btn" id="lGo" type="button">Войти</button><div class="err" id="lErr">' + esc(msg || '') + '</div>' +
     '<p class="muted">Личный код выдаёт ответственный за АВР. Никому его не сообщайте.</p></div>' +
-    (standalone ? '' : '<div class="card muted"><b>Установите на телефон:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение» / «Добавить на главный экран».</div>');
+    (standalone ? '' : '<div class="card muted"><b>Установите приложение:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение».<br>Компьютер — Chrome или Edge → кнопка «⬇ Установить» вверху или значок установки в адресной строке; появится значок на рабочем столе.</div>');
   $('lGo').onclick = function () {
     var b = this; b.disabled = true; $('lErr').textContent = '';
-    api({ sign_api: 'login', name: $('lName').value, code: $('lCode').value, device: navigator.userAgent.slice(0, 120) }).then(function (j) {
-      ls('sg_token', j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true;
+    api({ sign_api: 'login', name: $('lName').value, code: $('lCode').value, device: devName() }).then(function (j) {
+      ls('sg_token', j.token); saveTok(j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true;
       offerBio();
     }).catch(function (e) { $('lErr').textContent = e.message; b.disabled = false; });
   };
@@ -129,7 +150,7 @@ function unb64(s) { return Uint8Array.from(atob(s), function (c) { return c.char
 function offerBio() {
   bioAvailable().then(function (ok) {
     if (!ok || ls('sg_bio')) return showInbox();
-    $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔐</div><h3>Входить по Face ID или отпечатку?</h3><p class="muted">Код больше вводить не придётся — только лицо или палец.</p>' +
+    $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔐</div><h3>Входить через ' + BIO + '?</h3><p class="muted">Код больше вводить не придётся.</p>' +
       '<button class="btn" id="bOn" type="button">Включить</button><button class="btn gray" id="bNo" type="button">Не сейчас</button><div class="err" id="bErr"></div></div>';
     $('bNo').onclick = showInbox;
     $('bOn').onclick = function () {
@@ -151,20 +172,20 @@ function showLock() {
   UNLOCKED = false; $('out').style.display = 'none';
   var bio = !!ls('sg_bio');
   $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔒</div><h3>' + esc(ME.name) + '</h3>' +
-    (bio ? '<button class="btn" id="kBio" type="button">Войти по Face ID / отпечатку</button>' : '') +
+    (bio ? '<button class="btn" id="kBio" type="button">Войти через ' + BIO + '</button>' : '') +
     '<label style="display:block;text-align:left;margin-top:14px">Личный код</label><input id="kCode" inputmode="numeric" maxlength="10">' +
     '<button class="btn ' + (bio ? 'gray' : '') + '" id="kGo" type="button">Войти по коду</button><div class="err" id="kErr"></div>' +
     '<p><a href="#" id="kOther" class="muted">Войти другим человеком</a></p></div>';
   if (bio) $('kBio').onclick = function () { bioCheck().then(function () { UNLOCKED = true; showInbox(); }).catch(function (e) { $('kErr').textContent = 'Не распознано. Попробуйте ещё раз или войдите по коду.'; }); };
   $('kGo').onclick = function () {
     var b = this; b.disabled = true;
-    api({ sign_api: 'login', name: ME.name, code: $('kCode').value, device: navigator.userAgent.slice(0, 120) }).then(function (j) {
-      ls('sg_token', j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; offerBio();
+    api({ sign_api: 'login', name: ME.name, code: $('kCode').value, device: devName() }).then(function (j) {
+      ls('sg_token', j.token); saveTok(j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; offerBio();
     }).catch(function (e) { $('kErr').textContent = e.message; b.disabled = false; });
   };
   $('kOther').onclick = function (e) { e.preventDefault(); logout(); };
 }
-function logout() { ls('sg_token', null); ls('sg_bio', null); ls('sg_me', null); ME = null; showLogin(); }
+function logout() { try { caches.delete('avr-sign-auth'); } catch (e) {} ls('sg_token', null); ls('sg_bio', null); ls('sg_me', null); ME = null; showLogin(); }
 $('out').onclick = function () { if (confirmBox('Выйти из кабинета на этом телефоне?')) logout(); };
 function confirmBox(t) { return window.confirm(t); }
 document.addEventListener('visibilitychange', function () {
@@ -179,8 +200,10 @@ function pending(list) { return list.filter(function (r) { return r.status === '
 function showInbox() {
   UNLOCKED = true; $('out').style.display = ''; $('hd').textContent = ME.name;
   $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
-    ('Notification' in window && Notification.permission === 'default' ? '<button class="btn gray" id="nOn" type="button">🔔 Включить уведомления</button>' : '');
-  if ($('nOn')) $('nOn').onclick = function () { Notification.requestPermission().then(function () { $('nOn').remove(); }); };
+    (!MOBILE ? '' : !('PushManager' in window) ? '<div class="card muted">Чтобы приходили уведомления на iPhone: Safari → «Поделиться» → «На экран „Домой“», затем откройте приложение со значка.</div>'
+      : Notification.permission !== 'granted' ? '<button class="btn gray" id="nOn" type="button">🔔 Включить уведомления</button>' : '');
+  if ($('nOn')) $('nOn').onclick = function () { var b = this; ensurePush(true).then(function (ok) { if (ok) b.remove(); else b.textContent = 'Уведомления запрещены — разрешите их в настройках телефона'; }); };
+  ensurePush(false);
   [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.onclick = function () { TAB = b.dataset.t; drawList(); }; });
   load();
   clearInterval(POLL); POLL = setInterval(function () { if (UNLOCKED && !document.hidden) load(true); }, 30000);
@@ -195,6 +218,7 @@ function load(quiet) {
     var fresh = p.filter(function (r) { return before.indexOf(r.id) < 0; });
     if (quiet && fresh.length) notify(fresh[0]);
     if ($('list')) drawList();
+    if (MOBILE && j.confirms && j.confirms.length && !CONF) showConfirm(j.confirms[0]);
   }).catch(function (e) {
     if (/войдите заново/.test(e.message)) return showLogin('Войдите заново.');
     if (!quiet && $('list')) $('list').innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
@@ -248,8 +272,10 @@ function drawAct(r, html) {
     (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : '');
   var sb = $('sb'); fit(sb); setTimeout(function () { fit(sb); }, 300); window.onresize = function () { fit(sb); };
   if (!mineWait) return;
+  if (!MOBILE) $('doSign').textContent = '✔ Подписать (подтвердить на телефоне)';
   $('doSign').onclick = function () {
     var b = this;
+    if (!MOBILE) return pcSign(r, b);
     sheet('<h3 style="margin:0 0 8px">Подписать АВР №' + esc(r.num) + '?</h3><p class="muted">Вы подтверждаете, что работы выполнены, объёмы и сумма ' + esc(r.total) + ' верны.</p><button class="btn ok" id="mYes" type="button">✔ Подписываю</button><button class="btn gray" id="mNo" type="button">Отмена</button>');
     $('mNo').onclick = closeSheet;
     $('mYes').onclick = function () {
@@ -258,7 +284,7 @@ function drawAct(r, html) {
       gate.then(function () { return api({ sign_api: 'sign', token: ls('sg_token'), id: r.id }); }).then(function (j) {
         if (j.allSigned) { b.textContent = 'Все подписали — сохраняю PDF…'; return makeFinal(r.id, j.html).then(function () { openAct(r.id); load(true); }); }
         openAct(r.id); load(true);
-      }).catch(function (e) { $('aErr').textContent = e.name === 'NotAllowedError' ? 'Face ID / отпечаток не подтверждён' : e.message; b.disabled = false; b.textContent = '✔ Подписываю'; });
+      }).catch(function (e) { $('aErr').textContent = e.name === 'NotAllowedError' ? BIO + ' — не подтверждено' : e.message; b.disabled = false; b.textContent = '✔ Подписываю'; });
     };
   };
   $('doRej').onclick = function () {
@@ -272,9 +298,56 @@ function drawAct(r, html) {
     };
   };
 }
+/* ---------- подпись с компьютера: подтверждение Face ID на телефоне ---------- */
+var WAIT = null;
+function pcSign(r, b) {
+  sheet('<h3 style="margin:0 0 8px">Подписать АВР №' + esc(r.num) + '?</h3><p class="muted">Подпись нужно подтвердить на вашем телефоне через Face ID / отпечаток.</p><button class="btn ok" id="mYes" type="button">📱 Отправить на телефон</button><button class="btn gray" id="mNo" type="button">Отмена</button><div class="err" id="mErr"></div>');
+  $('mNo').onclick = closeSheet;
+  $('mYes').onclick = function () {
+    this.disabled = true;
+    api({ sign_api: 'confirm_req', token: ls('sg_token'), id: r.id, device: devName() }).then(function (j) {
+      var left = 300;
+      sheet('<div class="center" style="padding:10px"><div style="font-size:46px">📱</div><h3>Подтвердите на телефоне</h3><p class="muted">' +
+        (j.phones ? 'На телефон отправлено уведомление. Откройте его и подтвердите Face ID / отпечатком.' : 'Уведомления на телефоне не включены. Откройте приложение «АВР Подписи» на телефоне — запрос появится там.') +
+        '</p><p id="wLeft" class="muted"></p><button class="btn gray" id="wNo" type="button">Закрыть</button></div>');
+      $('wNo').onclick = function () { clearInterval(WAIT); closeSheet(); };
+      clearInterval(WAIT);
+      WAIT = setInterval(function () {
+        left -= 3; if ($('wLeft')) $('wLeft').textContent = 'Ожидание: ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2);
+        if (left <= 0) { clearInterval(WAIT); if ($('wLeft')) $('wLeft').textContent = 'Время вышло. Нажмите «Подписать» ещё раз.'; return; }
+        api({ sign_api: 'confirm_status', token: ls('sg_token'), cid: j.cid }).then(function (s) {
+          if (s.status === 'подписано') { clearInterval(WAIT); closeSheet(); openAct(r.id); load(true); }
+          else if (s.status === 'отменено') { clearInterval(WAIT); if ($('wLeft')) $('wLeft').textContent = 'Отменено на телефоне.'; }
+        }).catch(function () {});
+      }, 3000);
+    }).catch(function (e) { $('mErr').textContent = e.message; });
+  };
+}
+var CONF = null;
+function showConfirm(c) {
+  CONF = c;
+  var bio = !!ls('sg_bio');
+  sheet('<div style="font-size:13px;color:var(--blue);font-weight:700">ЗАПРОС С КОМПЬЮТЕРА</div><h3 style="margin:4px 0 8px">Подписать АВР №' + esc(c.num) + ' от ' + esc(c.date) + '?</h3>' +
+    '<div>' + esc(c.exe) + '</div><div class="muted">' + esc(c.obj) + ' · сумма <b>' + esc(c.total) + '</b></div>' +
+    (bio ? '' : '<label style="display:block;margin-top:10px">Личный код</label><input id="cCode" inputmode="numeric" maxlength="10">') +
+    '<button class="btn ok" id="cYes" type="button">' + (bio ? '✔ Подтвердить ' + BIO : '✔ Подтвердить') + '</button><button class="btn gray" id="cNo" type="button">Это не я / отменить</button><div class="err" id="cErr"></div>');
+  $('cNo').onclick = function () { api({ sign_api: 'confirm', token: ls('sg_token'), cid: c.cid, yes: false }).catch(function () {}); CONF = null; closeSheet(); };
+  $('cYes').onclick = function () {
+    var b = this, code = $('cCode') ? $('cCode').value.trim() : '';
+    if (!bio && !code) { $('cErr').textContent = 'Введите личный код'; return; }
+    (bio ? bioCheck() : Promise.resolve()).then(function () {
+      b.disabled = true; b.textContent = 'Подписываю…';
+      return api({ sign_api: 'confirm', token: ls('sg_token'), cid: c.cid, yes: true, code: code });
+    }).then(function (j) {
+      return (j.allSigned ? makeFinal(c.id, j.html) : Promise.resolve()).then(function () {
+        CONF = null; closeSheet(); showInbox();
+      });
+    }).catch(function (e) { b.disabled = false; b.textContent = '✔ Подтвердить'; $('cErr').textContent = e.name === 'NotAllowedError' ? BIO + ' — не подтверждено' : e.message; });
+  };
+}
 function sheet(h) { $('mdlIn').innerHTML = h; $('mdl').style.display = 'flex'; }
 function closeSheet() { $('mdl').style.display = 'none'; }
-$('mdl').onclick = function (e) { if (e.target === this) closeSheet(); };
+$('mdl').onclick = function (e) { if (e.target === this && !CONF) closeSheet(); };
 function makeFinal(id, html) {
   var el = $('hidden'); el.innerHTML = html;
   return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
