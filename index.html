@@ -51,6 +51,7 @@ button:disabled{opacity:.55;cursor:default}
 .w .nums{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
 .w .sum{text-align:right;font-weight:bold;margin-top:6px}
 .xh{margin-top:14px;font-weight:bold;color:var(--acc)}
+.pt{width:100%;border-collapse:collapse;font-size:13px}.pt th,.pt td{border-bottom:1px solid var(--line);padding:6px 4px;text-align:left;vertical-align:top}.pt td.n,.pt th.n{text-align:right;white-space:nowrap}.pt small{color:var(--muted)}
 .w.ex{border-color:#d8b9a0;background:#fffaf4}
 .x{border:0;background:none;font-size:22px;color:var(--muted);padding:0 6px}
 .add{width:100%;margin-top:10px;border-style:dashed}
@@ -149,6 +150,10 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 <div class="ok" id="ok"></div>
 <div class="muted" id="drv" style="margin-top:4px"></div>
 
+<div class="card" id="prCard" style="margin-top:14px;display:none">
+  <p class="step">Стоимости по договору</p>
+  <div id="prices"></div>
+</div>
 <div class="card" style="margin-top:14px">
   <p class="step"><i>VII.</i> Предпросмотр акта</p>
   <div id="pvBox"><div id="pv" class="a4"></div></div>
@@ -276,6 +281,22 @@ function pick(k) {
     });
   });
   K.lines = L;
+  var pr = [], seenP = {}, tot = 0, idx = 0;
+  k.parts.forEach(function (p) {
+    p.text.split('\n').forEach(function (line) {
+      if (!line.trim()) return;
+      var w = L[idx++]; if (isNaN(w.price)) return;
+      var key = okey(w.name) + '|' + w.price; if (seenP[key]) { seenP[key].qty += isNaN(w.qty) ? 0 : w.qty; return; }
+      var it = { name: w.name, unit: w.unit, price: w.price, qty: isNaN(w.qty) ? 0 : w.qty, tag: p.num && p.num !== k.num ? 'доп. №' + p.num : '' };
+      seenP[key] = it; pr.push(it);
+    });
+  });
+  pr.forEach(function (x) { tot += x.qty * x.price; });
+  $('prices').innerHTML = pr.length ? '<table class="pt"><tr><th>Работа<\/th><th class="n">Цена<\/th><th class="n">По договору<\/th><th class="n">Сумма<\/th><\/tr>' +
+    pr.map(function (x) { return '<tr><td>' + esc(x.name) + (x.tag ? ' <small>(' + esc(x.tag) + ')<\/small>' : '') + '<\/td><td class="n">' + fmt(x.price) + (x.unit ? ' / ' + esc(x.unit) : '') + '<\/td><td class="n">' + (x.qty ? fmt(x.qty) + ' ' + esc(x.unit || '') : '—') + '<\/td><td class="n">' + (x.qty ? fmt(x.qty * x.price) : '—') + '<\/td><\/tr>'; }).join('') +
+    (tot ? '<tr><td colspan="3"><b>Итого по договору<\/b><\/td><td class="n"><b>' + fmt(tot) + '<\/b><\/td><\/tr>' : '') + '<\/table>'
+    : '<div class="muted">В договоре не указаны цены.<\/div>';
+  $('prCard').style.display = 'block';
   $('cLines').innerHTML = html;
   $('ctr').style.display = 'block';
   $('num').value = k.num; $('obj').value = k.obj;
@@ -425,14 +446,8 @@ function makePdf(a) {
   return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
     var pdf = new jspdf.jsPDF({ unit: 'pt', format: 'a4' });
     var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-    var pxPerPt = cv.width / pw, pageH = Math.floor(ph * pxPerPt), y = 0, first = true;
-    while (y < cv.height) {
-      var h = Math.min(pageH, cv.height - y), c = document.createElement('canvas');
-      c.width = cv.width; c.height = h; c.getContext('2d').drawImage(cv, 0, y, cv.width, h, 0, 0, cv.width, h);
-      if (!first) pdf.addPage();
-      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pw, h / pxPerPt);
-      y += h; first = false;
-    }
+    var k = Math.min(pw / cv.width, ph / cv.height), w = cv.width * k, h = cv.height * k;
+    pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', (pw - w) / 2, 0, w, h);
     return pdf.output('blob');
   });
 }
