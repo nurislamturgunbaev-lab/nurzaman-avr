@@ -50,6 +50,8 @@ button:disabled{opacity:.55;cursor:default}
 .w .top input{flex:1}
 .w .nums{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
 .w .sum{text-align:right;font-weight:bold;margin-top:6px}
+.xh{margin-top:14px;font-weight:bold;color:var(--acc)}
+.w.ex{border-color:#d8b9a0;background:#fffaf4}
 .x{border:0;background:none;font-size:22px;color:var(--muted);padding:0 6px}
 .add{width:100%;margin-top:10px;border-style:dashed}
 .total{display:flex;justify-content:space-between;font-size:18px;font-weight:bold;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}
@@ -73,6 +75,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 .a4 .ap .h{font-weight:700;margin-bottom:12px}
 .a4 .pl{display:grid;grid-template-columns:118px 96px auto;column-gap:8px;align-items:end;margin:0 0 12px}
 .a4 .pl .nm,.a4 .sg2 .nm{white-space:nowrap}
+.a4 .sg2 .nm{text-align:right}
 .a4 .pl .ln2{border-bottom:1px solid #000;margin-bottom:4px}
 .a4 .c{text-align:center}.a4 .r{text-align:right}
 .a4 table{width:100%;border-collapse:collapse;margin-top:16px}
@@ -80,9 +83,10 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 .a4 th{font-weight:700;text-align:center}
 .a4 td{text-align:center}.a4 td.l{text-align:left}.a4 td.n{text-align:right}
 .a4 .grp{font-style:italic;margin:26px 0 10px}
-.a4 .sg2{display:grid;grid-template-columns:1fr 120px auto;column-gap:10px;align-items:end;margin:0 0 14px;font-weight:700}
+.a4 .sg2{display:grid;grid-template-columns:180px 140px 1fr;column-gap:12px;align-items:end;margin:0 0 14px;font-weight:700}
 .a4 .sg2 .ln2{border-bottom:1px solid #000;margin-bottom:4px}
-@media print{@page{size:A4;margin:0}body *{visibility:hidden}#sheet,#sheet *{visibility:visible}#sheet{position:absolute;left:0;top:0}}
+@media print{@page{size:A4;margin:0}html,body{height:auto;background:#fff}body>*:not(#sheet){display:none!important}#sheet{position:static;min-height:0;width:100%}}
+#sheet{min-height:0}
 </style>
 </head>
 <body>
@@ -110,12 +114,14 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
     <div><label for="date">Дата акта</label><input id="date" type="date"></div>
   </div>
   <label for="obj">Объект</label><input id="obj">
-  <label for="title">Описание работ (после слов «Акт выполненных работ»)</label><input id="title" placeholder="можно оставить пустым">
+  <label for="exe">Исполнитель — ФИО подрядчика (подставляется сам, можно изменить)</label><input id="exe" placeholder="ИП Фамилия Имя Отчество">
+  <label for="title">Описание работ (после слов «Акт выполненных работ», берётся из договора)</label><input id="title" placeholder="можно оставить пустым">
 </div>
 <div class="card">
   <p class="step"><i>III.</i> Работы</p>
   <div id="rows"></div>
-  <button class="add" id="addRow" type="button">+ Добавить работу вручную</button>
+  <div class="row2"><button class="add" id="addRow" type="button">+ Добавить работу</button><button class="add" id="addExtra" type="button">+ Доп. работы</button></div>
+  <div class="muted" id="mode" style="margin-top:6px"></div>
   <label class="tax"><input type="checkbox" id="tax"> Добавить единый налог (4%) — сумма делится на 96%</label>
   <div class="total"><span>Итого</span><span id="total">0</span></div>
   <div class="muted" id="words"></div>
@@ -126,7 +132,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
     <summary>Подписи: II. Утверждаю · IV. Работы приняли · V. Работы сдал (нажмите, чтобы изменить)</summary>
     <div id="sig"></div>
     <div class="sgh">V. РАБОТЫ СДАЛ</div>
-    <div class="row2"><div><label for="exe">Исполнитель (компания)</label><input id="exe" placeholder="ИП / ОсОО …"></div><div><label for="giver">ФИО сдавшего (необязательно)</label><input id="giver"></div></div>
+    <label for="giver">ФИО сдавшего (необязательно)</label><input id="giver">
     <div class="row2" style="margin-top:8px"><button id="addAp" type="button">+ утверждающий</button><button id="addAc" type="button">+ принимающий</button></div>
     <div class="muted" style="margin-top:6px">Подписи запоминаются на этом телефоне для каждого объекта.</div>
   </details>
@@ -141,6 +147,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 </div>
 <div class="err" id="err"></div>
 <div class="ok" id="ok"></div>
+<div class="muted" id="drv" style="margin-top:4px"></div>
 
 <div class="card" style="margin-top:14px">
   <p class="step"><i>VII.</i> Предпросмотр акта</p>
@@ -152,9 +159,11 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 
 <script>
 var SHEET_ID = '1jUM4OQT9KwZdvsXJjHLaj23qscH8CrynlTQWKYlLiwI';
+/* Адрес приёмника на Google Диске (Apps Script «АВР — общедоступная форма», функция doPost). Пусто — автосохранение выключено. */
+var UPLOAD_URL = 'https://script.google.com/macros/s/AKfycbxYh0JPMnDTBHW1wo-VA8gFbXic6qaJknlMK9CoGyfi-cfEzHjrBjniOCSydGJ9k-jx/exec';
 var DEF_SIG = {
-  approve: [{ role: 'Директор', name: 'Айткулов И.С.' }, { role: 'Заместитель директора', name: 'Алимбеков А.Т.' }, { role: 'Руководитель проекта', name: 'Убайдилла уулу Р.' }],
-  accept: [{ role: 'Руководитель ПТО', name: 'Дуйшобай уулу Женишбек' }, { role: 'Инженеры ПТО', name: 'Тургунбаев Нурислам' }, { role: 'Прораб', name: 'Таалай уулу Нурсултан' }]
+  approve: [{ role: 'Директор', name: 'Акматов Н.О.' }, { role: 'Заместитель директора', name: 'Курслан уулу Жоодар' }, { role: 'Руководитель проекта', name: 'Убайдилла уулу Руслан' }],
+  accept: [{ role: 'Руководитель ПТО', name: 'Дуйшобай уулу Женишбек' }, { role: 'Инженеры ПТО', name: 'Тургунбаев Нурислам' }, { role: 'Прораб', name: 'Таалай уулу Нурсултан' }, { role: 'Мастер', name: 'Сагындык уулу Талгат' }]
 };
 var CONTRACTS = [], LINKS = {}, NAMES = {}, K = null, ROWS = [], SIG = null;
 var $ = function (id) { return document.getElementById(id); };
@@ -271,17 +280,25 @@ function pick(k) {
   $('ctr').style.display = 'block';
   $('num').value = k.num; $('obj').value = k.obj;
   $('exe').value = /^(ИП|ОсОО|ОАО|ООО)\b/i.test(k.raw) ? k.raw : ((k.org ? k.org + ' ' : '') + k.who);
+  $('title').value = descr(k);
+  EXTRA = false; showMode();
   ROWS = []; addRow();
   loadSig();
 }
+function descr(k) {
+  var t = String(k.title || '').replace(/\s+[-–—]\s+\d[\s\S]*$/, '').trim();
+  return t ? t.charAt(0).toLowerCase() + t.slice(1) : '';
+}
 $('cLines').addEventListener('click', function (e) {
   var b = e.target.closest('[data-l]'); if (!b) return;
-  var w = K.lines[+b.dataset.l];
-  var row = { name: w.name, unit: w.unit || '', qty: '', price: isNaN(w.price) ? '' : w.price };
-  var empty = ROWS.findIndex(function (r) { return !String(r.name).trim(); });
+  var w = K.lines[+b.dataset.l], key = okey(w.name), unit = w.unit, price = w.price;
+  K.lines.forEach(function (o) { if (okey(o.name) === key) { if (!unit && o.unit) unit = o.unit; if (isNaN(price) && !isNaN(o.price)) price = o.price; } });
+  var row = { name: w.name, unit: unit || 'шт', qty: '', price: isNaN(price) ? '' : price, extra: EXTRA };
+  var empty = ROWS.findIndex(function (r) { return !String(r.name).trim() && !!r.extra === EXTRA; });
   if (empty >= 0) ROWS[empty] = row; else ROWS.push(row);
   renderRows();
-  var i = empty >= 0 ? empty : ROWS.length - 1;
+  sortRows();
+  var i = ROWS.indexOf(row);
   var q = document.querySelector('#rows [data-i="' + i + '"] input[data-k="qty"]');
   if (q) { q.focus(); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   b.textContent = '✓ добавлено';
@@ -289,10 +306,16 @@ $('cLines').addEventListener('click', function (e) {
 
 /* ---------- строки акта ---------- */
 function rowSum(r) { var q = num(r.qty), p = num(r.price); return (isNaN(q) || isNaN(p)) ? NaN : Math.round(q * p * 100) / 100; }
-function addRow() { ROWS.push({ name: '', unit: '', qty: '', price: '' }); renderRows(); }
+var EXTRA = false;
+function showMode() { $('mode').textContent = EXTRA ? 'Сейчас «+ в акт» добавляет в ДОП. РАБОТЫ (нумерация с 1). Нажмите «+ Добавить работу», чтобы вернуться к основным.' : ''; }
+function sortRows() { ROWS.sort(function (a, b) { return (a.extra ? 1 : 0) - (b.extra ? 1 : 0); }); }
+function addRow() { EXTRA = false; showMode(); ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: false }); sortRows(); renderRows(); }
+function addExtra() { EXTRA = true; showMode(); ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: true }); sortRows(); renderRows(); }
 function renderRows() {
+  var n = 0, ne = 0;
   $('rows').innerHTML = ROWS.map(function (r, i) {
-    return '<div class="w" data-i="' + i + '"><div class="top"><b>' + (i + 1) + '.<\/b><input data-k="name" value="' + esc(r.name) + '" placeholder="Наименование работы"><button class="x" type="button" title="Удалить">×<\/button><\/div>' +
+    var no = r.extra ? ++ne : ++n;
+    return (r.extra && ne === 1 ? '<div class="xh">Дополнительные работы<\/div>' : '') + '<div class="w' + (r.extra ? ' ex' : '') + '" data-i="' + i + '"><div class="top"><b>' + no + '.<\/b><input data-k="name" value="' + esc(r.name) + '" placeholder="Наименование работы"><button class="x" type="button" title="Удалить">×<\/button><\/div>' +
       '<div class="nums"><input data-k="qty" value="' + esc(r.qty) + '" inputmode="decimal" placeholder="Кол-во"><input data-k="unit" value="' + esc(r.unit) + '" placeholder="ед. (м2)"><input data-k="price" value="' + esc(r.price) + '" inputmode="decimal" placeholder="Цена"><\/div>' +
       '<div class="sum">' + fmt(rowSum(r)) + '<\/div><\/div>';
   }).join('');
@@ -309,9 +332,10 @@ $('rows').addEventListener('input', function (e) {
 });
 $('rows').addEventListener('click', function (e) {
   if (!e.target.closest('.x')) return;
-  ROWS.splice(+e.target.closest('.w').dataset.i, 1); if (!ROWS.length) ROWS.push({ name: '', unit: '', qty: '', price: '' }); renderRows();
+  ROWS.splice(+e.target.closest('.w').dataset.i, 1); if (!ROWS.length) ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: false }); renderRows();
 });
 $('addRow').addEventListener('click', addRow);
+$('addExtra').addEventListener('click', addExtra);
 
 /* ---------- сумма прописью ---------- */
 function words(n) {
@@ -332,8 +356,8 @@ function words(n) {
 }
 
 /* ---------- подписи ---------- */
-function loadSig() { var s = store('avr2_sig_' + okey($('obj').value)) || store('avr2_sig_default'); SIG = JSON.parse(JSON.stringify(s || DEF_SIG)); renderSig(); }
-function saveSig() { store('avr2_sig_' + okey($('obj').value), SIG); store('avr2_sig_default', SIG); }
+function loadSig() { var s = store('avr3_sig_' + okey($('obj').value)) || store('avr3_sig_default'); SIG = JSON.parse(JSON.stringify(s || DEF_SIG)); renderSig(); }
+function saveSig() { store('avr3_sig_' + okey($('obj').value), SIG); store('avr3_sig_default', SIG); }
 function renderSig() {
   function line(g, x, i) { return '<div class="sg"><input data-g="' + g + '" data-i="' + i + '" data-k="role" value="' + esc(x.role) + '" placeholder="Должность"><input data-g="' + g + '" data-i="' + i + '" data-k="name" value="' + esc(x.name) + '" placeholder="ФИО"><button class="x" type="button" data-sg="' + g + '" data-si="' + i + '">×<\/button><\/div>'; }
   var h = '<div class="sgh">II. УТВЕРЖДАЮ<\/div>';
@@ -356,7 +380,7 @@ function gather() {
   var a = {
     num: $('num').value.trim(), date: ruDate($('date').value), obj: $('obj').value.trim(), title: $('title').value.trim(), giver: $('giver').value.trim(),
     exe: $('exe').value.trim(), approve: SIG.approve.filter(function (x) { return x.role || x.name; }), accept: SIG.accept.filter(function (x) { return x.role || x.name; }),
-    rows: ROWS.filter(function (r) { return String(r.name).trim(); }).map(function (r) { return { name: String(r.name).trim(), unit: String(r.unit).trim(), qty: num(r.qty), price: num(r.price), sum: rowSum(r) }; })
+    rows: ROWS.filter(function (r) { return String(r.name).trim(); }).map(function (r) { return { name: String(r.name).trim(), unit: String(r.unit).trim(), qty: num(r.qty), price: num(r.price), sum: rowSum(r), extra: !!r.extra }; })
   };
   a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.net = Math.round(a.net * 100) / 100;
   a.taxOn = $('tax').checked; a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
@@ -370,14 +394,16 @@ function collect() {
   $('err').textContent = e; $('ok').textContent = '';
   if (e) return null;
   saveSig();
-  a.file = ('АВР №' + a.num + ' ' + a.exe + ' ' + a.date).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  a.work = (a.title || (a.rows[0] && a.rows[0].name) || '').slice(0, 50).trim();
+  a.file = (a.date + ' — АВР №' + a.num + ' — ' + clean(a.exe) + ' — ' + a.work).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
   return a;
 }
 
 /* ---------- PDF ---------- */
 function sheetHtml(a) {
   var ap = a.approve.map(function (x) { return '<div class="pl"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
-  var rows = a.rows.map(function (r, i) { return '<tr><td>' + (i + 1) + '<\/td><td class="l">' + esc(r.name) + '<\/td><td>' + esc(r.unit) + '<\/td><td>' + fmt(r.qty) + '<\/td><td class="n">' + fmt(r.price) + '<\/td><td class="n"><b>' + fmt(r.sum) + '<\/b><\/td><\/tr>'; }).join('');
+  var n1 = 0, n2 = 0;
+  var rows = a.rows.map(function (r) { var no = r.extra ? ++n2 : ++n1; return (r.extra && n2 === 1 ? '<tr><td colspan="6" class="l"><b>Дополнительные работы<\/b><\/td><\/tr>' : '') + '<tr><td>' + no + '<\/td><td class="l">' + esc(r.name) + '<\/td><td>' + esc(r.unit) + '<\/td><td>' + fmt(r.qty) + '<\/td><td class="n">' + fmt(r.price) + '<\/td><td class="n"><b>' + fmt(r.sum) + '<\/b><\/td><\/tr>'; }).join('');
   var foot = a.taxOn
     ? '<tr><td colspan="5" class="n">Итого без налога<\/td><td class="n">' + fmt(a.net) + '<\/td><\/tr><tr><td colspan="5" class="n">Единый налог 4%<\/td><td class="n">' + fmt(a.tax) + '<\/td><\/tr>'
     : '';
@@ -433,13 +459,16 @@ function makeDocx(a) {
   a.approve.forEach(function (x) { apRows.push(sigRow(AW, [x.role, '__', x.name], false)); });
   var head = new D.Table({ borders: NOB, alignment: D.AlignmentType.RIGHT, width: { size: 6100, type: D.WidthType.DXA }, columnWidths: AW, rows: apRows });
   var trs = [new D.TableRow({ tableHeader: true, children: ['№ п/п', 'Наименование работ', 'Ед. изм.', 'Кол-во', 'Стоимость работы', 'Итого'].map(function (t, i) { return cell(t, { b: true, w: W[i] }); }) })];
-  a.rows.forEach(function (r, i) {
-    trs.push(new D.TableRow({ children: [cell(i + 1, { w: W[0] }), cell(r.name, { w: W[1], al: D.AlignmentType.LEFT }), cell(r.unit, { w: W[2] }), cell(fmt(r.qty), { w: W[3] }), cell(fmt(r.price), { w: W[4] }), cell(fmt(r.sum), { w: W[5], b: true })] }));
+  var d1 = 0, d2 = 0;
+  a.rows.forEach(function (r) {
+    var no = r.extra ? ++d2 : ++d1;
+    if (r.extra && d2 === 1) trs.push(new D.TableRow({ children: [new D.TableCell({ columnSpan: 6, width: { size: 9300, type: D.WidthType.DXA }, margins: { top: 50, bottom: 50, left: 80, right: 80 }, children: [para([run('Дополнительные работы', { b: true, s: 10.5 })])] })] }));
+    trs.push(new D.TableRow({ children: [cell(no, { w: W[0] }), cell(r.name, { w: W[1], al: D.AlignmentType.LEFT }), cell(r.unit, { w: W[2] }), cell(fmt(r.qty), { w: W[3] }), cell(fmt(r.price), { w: W[4] }), cell(fmt(r.sum), { w: W[5], b: true })] }));
   });
   if (a.taxOn) [['Итого без налога', a.net], ['Единый налог 4%', a.tax]].forEach(function (x) { trs.push(new D.TableRow({ children: [cell('', { w: W[0] }), cell(x[0], { w: W[1], al: D.AlignmentType.LEFT }), cell('', { w: W[2] }), cell('', { w: W[3] }), cell('', { w: W[4] }), cell(fmt(x[1]), { w: W[5] })] })); });
   trs.push(new D.TableRow({ children: [cell('', { w: W[0] }), cell('Итого', { w: W[1], b: true, al: D.AlignmentType.LEFT }), cell('', { w: W[2] }), cell('', { w: W[3] }), cell('', { w: W[4] }), cell(fmt(a.total), { w: W[5], b: true })] }));
   var works = new D.Table({ borders: B, width: { size: 9300, type: D.WidthType.DXA }, columnWidths: W, rows: trs });
-  var SW = [3800, 1900, 3600];
+  var SW = [2600, 2000, 4700];
   function lab(t) { return new D.TableRow({ children: [new D.TableCell({ columnSpan: 3, width: { size: 9300, type: D.WidthType.DXA }, borders: { top: NB, left: NB, right: NB, bottom: NB }, margins: { top: 200, bottom: 60 }, children: [para([run(t, { i: true })])] })] }); }
   var sg = [lab('Работы приняли:')];
   a.accept.forEach(function (x) { sg.push(sigRow(SW, [x.role, '__', x.name], true)); });
@@ -467,7 +496,7 @@ function preview() {
   clearTimeout(pvT);
   pvT = setTimeout(function () {
     var a = gather();
-    a.rows = a.rows.map(function (r) { return { name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: isNaN(r.sum) ? 0 : r.sum }; });
+    a.rows = a.rows.map(function (r) { return { name: r.name, unit: r.unit, qty: r.qty, price: r.price, sum: isNaN(r.sum) ? 0 : r.sum, extra: r.extra }; });
     a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
     $('pv').innerHTML = sheetHtml(a);
     var w = $('pvBox').clientWidth, k = Math.min(1, w / 794);
@@ -481,10 +510,28 @@ document.addEventListener('click', function (e) { if (e.target.closest('button')
 window.addEventListener('resize', preview);
 
 /* ---------- кнопки ---------- */
+function b64(blob) { return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok(String(r.result).split(',')[1]); }; r.onerror = no; r.readAsDataURL(blob); }); }
+var SENT = {};
+function toDrive(a, docxBlob, pdfBlob) {
+  if (!UPLOAD_URL) return Promise.resolve(null);
+  var key = a.file + '|' + a.total; if (SENT[key]) return Promise.resolve(SENT[key]);
+  $('drv').textContent = 'Сохраняю в Google Диск…';
+  return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
+    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, files: [
+      { name: a.file + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: d[0] },
+      { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }] }) });
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j || !j.ok) throw new Error(j && j.error || 'нет ответа');
+    SENT[key] = j;
+    $('drv').innerHTML = 'Сохранено в Google Диск, папка <b>' + esc(j.folder) + '<\/b>' + (j.folderUrl ? ' — <a href="' + esc(j.folderUrl) + '" target="_blank" rel="noopener">открыть<\/a>' : '');
+    return j;
+  }).catch(function (e) { $('drv').textContent = 'В Google Диск не сохранилось (' + (e && e.message || e) + '). Файлы на устройстве есть.'; });
+}
 $('print').addEventListener('click', function () {
   var a = collect(); if (!a) return;
   $('sheet').innerHTML = sheetHtml(a);
   setTimeout(function () { window.print(); }, 200);
+  Promise.all([makeDocx(a), makePdf(a)]).then(function (bl) { return toDrive(a, bl[0], bl[1]); });
 });
 function save(blob, name) {
   var u = URL.createObjectURL(blob), l = document.createElement('a');
@@ -497,6 +544,7 @@ $('pdf').addEventListener('click', function () {
   Promise.all([makeDocx(a), makePdf(a)]).then(function (bl) {
     save(bl[0], a.file + '.docx'); setTimeout(function () { save(bl[1], a.file + '.pdf'); }, 400);
     $('ok').textContent = 'Сохранено: ' + a.file + '.docx (можно править в Word) и .pdf';
+    return toDrive(a, bl[0], bl[1]);
   }).catch(function (e) { $('err').textContent = 'Не получилось: ' + e; }).then(function () { busy(b, false, 'Сохранить акт (Word + PDF)'); });
 });
 $('word').addEventListener('click', function () {
@@ -507,6 +555,7 @@ $('word').addEventListener('click', function () {
 $('share').addEventListener('click', function () {
   var a = collect(); if (!a) return; var b = this; busy(b, true, 'Готовлю файлы…');
   Promise.all([makePdf(a), makeDocx(a)]).then(function (bl) {
+    toDrive(a, bl[1], bl[0]);
     var files = [new File([bl[0]], a.file + '.pdf', { type: 'application/pdf' }), new File([bl[1]], a.file + '.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })];
     if (navigator.canShare && navigator.canShare({ files: files })) {
       return navigator.share({ files: files, title: a.file, text: a.file + ', сумма ' + fmt(a.total) + ' сом' }).then(function () { $('ok').textContent = 'Отправлено.'; }).catch(function () {});
