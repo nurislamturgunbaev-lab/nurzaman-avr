@@ -69,7 +69,7 @@ button{font:inherit;cursor:pointer}
 </style>
 </head>
 <body>
-<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="inst" type="button">⬇ Установить</button><button id="out" type="button" style="display:none">Выйти</button></header>
+<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="inst" type="button">⬇ Установить</button><button id="staffBtn" type="button" style="display:none">👥 Сотрудники</button><button id="out" type="button" style="display:none">Выйти</button></header>
 <main id="app"><div class="center muted">Загрузка…</div></main>
 <div class="modal" id="mdl"><div class="in" id="mdlIn"></div></div>
 <div id="hidden" class="a4"></div>
@@ -123,19 +123,19 @@ function start() {
 
 /* ---------- вход по личному коду ---------- */
 function showLogin(msg) {
-  UNLOCKED = false; $('out').style.display = 'none'; $('bd').innerHTML = ''; $('hd').textContent = 'АВР — Подписи';
+  UNLOCKED = false; $('out').style.display = 'none'; $('staffBtn').style.display = 'none'; $('bd').innerHTML = ''; $('hd').textContent = 'АВР — Подписи';
   var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   $('app').innerHTML = '<div class="card"><h3 style="margin:0 0 10px">Вход в кабинет</h3>' +
     '<label>ФИО (как в акте)</label><input id="lName" autocomplete="name" value="' + esc(ME ? ME.name : '') + '">' +
-    '<label>Личный код</label><input id="lCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10">' +
+    '<label>Пароль</label><input id="lCode" type="password" autocomplete="current-password" maxlength="40">' +
     '<button class="btn" id="lGo" type="button">Войти</button><div class="err" id="lErr">' + esc(msg || '') + '</div>' +
-    '<p class="muted">Личный код выдаёт ответственный за АВР. Никому его не сообщайте.</p></div>' +
+    '<p class="muted">Первый вход — пароль <b>1234</b>, затем сразу придумаете свой. Никому его не сообщайте.</p></div>' +
     (standalone ? '' : '<div class="card muted"><b>Установите приложение:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение».<br>Компьютер — Chrome или Edge → кнопка «⬇ Установить» вверху или значок установки в адресной строке; появится значок на рабочем столе.</div>');
   $('lGo').onclick = function () {
     var b = this; b.disabled = true; $('lErr').textContent = '';
     api({ sign_api: 'login', name: $('lName').value, code: $('lCode').value, device: devName() }).then(function (j) {
       ls('sg_token', j.token); saveTok(j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true;
-      offerBio();
+      afterLogin();
     }).catch(function (e) { $('lErr').textContent = e.message; b.disabled = false; });
   };
 }
@@ -169,18 +169,18 @@ function bioCheck() {
   return navigator.credentials.get({ publicKey: { challenge: rndBytes(32), allowCredentials: [{ type: 'public-key', id: unb64(ls('sg_bio')), transports: ['internal'] }], userVerification: 'required', timeout: 60000 } });
 }
 function showLock() {
-  UNLOCKED = false; $('out').style.display = 'none';
+  UNLOCKED = false; $('out').style.display = 'none'; $('staffBtn').style.display = 'none';
   var bio = !!ls('sg_bio');
   $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔒</div><h3>' + esc(ME.name) + '</h3>' +
     (bio ? '<button class="btn" id="kBio" type="button">Войти через ' + BIO + '</button>' : '') +
-    '<label style="display:block;text-align:left;margin-top:14px">Личный код</label><input id="kCode" inputmode="numeric" maxlength="10">' +
-    '<button class="btn ' + (bio ? 'gray' : '') + '" id="kGo" type="button">Войти по коду</button><div class="err" id="kErr"></div>' +
+    '<label style="display:block;text-align:left;margin-top:14px">Пароль</label><input id="kCode" type="password" maxlength="40">' +
+    '<button class="btn ' + (bio ? 'gray' : '') + '" id="kGo" type="button">Войти по паролю</button><div class="err" id="kErr"></div>' +
     '<p><a href="#" id="kOther" class="muted">Войти другим человеком</a></p></div>';
   if (bio) $('kBio').onclick = function () { bioCheck().then(function () { UNLOCKED = true; showInbox(); }).catch(function (e) { $('kErr').textContent = 'Не распознано. Попробуйте ещё раз или войдите по коду.'; }); };
   $('kGo').onclick = function () {
     var b = this; b.disabled = true;
     api({ sign_api: 'login', name: ME.name, code: $('kCode').value, device: devName() }).then(function (j) {
-      ls('sg_token', j.token); saveTok(j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; offerBio();
+      ls('sg_token', j.token); saveTok(j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; afterLogin();
     }).catch(function (e) { $('kErr').textContent = e.message; b.disabled = false; });
   };
   $('kOther').onclick = function (e) { e.preventDefault(); logout(); };
@@ -198,7 +198,7 @@ document.addEventListener('visibilitychange', function () {
 var POLL = null;
 function pending(list) { return list.filter(function (r) { return r.status === 'Ожидает' && r.mine && r.mine.st === ''; }); }
 function showInbox() {
-  UNLOCKED = true; $('out').style.display = ''; $('hd').textContent = ME.name;
+  UNLOCKED = true; $('out').style.display = ''; $('hd').textContent = ME.name; $('staffBtn').style.display = ME.admin ? '' : 'none';
   $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
     (!MOBILE ? '' : !('PushManager' in window) ? '<div class="card muted">Чтобы приходили уведомления на iPhone: Safari → «Поделиться» → «На экран „Домой“», затем откройте приложение со значка.</div>'
       : Notification.permission !== 'granted' ? '<button class="btn gray" id="nOn" type="button">🔔 Включить уведомления</button>' : '');
@@ -221,6 +221,7 @@ function load(quiet) {
     if (MOBILE && j.confirms && j.confirms.length && !CONF) showConfirm(j.confirms[0]);
   }).catch(function (e) {
     if (/войдите заново/.test(e.message)) return showLogin('Войдите заново.');
+    if (/смените пароль/.test(e.message)) return showChangePw();
     if (!quiet && $('list')) $('list').innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
   });
 }
@@ -234,6 +235,7 @@ function stLine(r) {
   if (r.status === 'Отклонён') return '<div class="s no">✖ Отклонён' + (r.mine && r.mine.st === 'Отклонён' ? ' вами' : '') + '</div>';
   if (r.status === 'Подписан') return '<div class="s ok">✔ Подписан всеми' + (r.pdf ? ' · PDF готов' : '') + '</div>';
   if (r.mine && r.mine.st === 'Подписан') return '<div class="s ok">✔ Вы подписали · ждём остальных (' + r.done + '/' + r.all + ')</div>';
+  if (!r.mine || r.mine.view) return '<div class="s">' + (r.mine ? '👁 Только просмотр · ' : '⏳ ') + 'подписано ' + r.done + '/' + r.all + '</div>';
   return '<div class="s w">● Ждёт вашей подписи (' + r.done + '/' + r.all + ')</div>';
 }
 function drawList() {
@@ -262,15 +264,18 @@ function openAct(id) {
     .catch(function (e) { $('act').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; });
 }
 function drawAct(r, html) {
-  var mineWait = r.status === 'Ожидает' && r.mine && r.mine.st === '';
+  var myTurn = r.status === 'Ожидает' && r.mine && r.mine.st === '';
+  var mineWait = myTurn && (MOBILE || ME.admin);
   $('act').innerHTML = '<div class="card"><b>АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</b><div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + ' · сумма ' + esc(r.total) + '</div>' + stLine(r) +
     (r.pdf ? '<a class="btn gray" style="display:block;text-align:center;text-decoration:none" href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 Открыть подписанный PDF</a>' : '') + '</div>' +
     '<div class="sheetBox" id="sb"><div class="a4">' + html + '</div></div>' +
     '<div class="card who"><b>Подписи</b>' + r.signers.map(function (p) {
       return '<div>' + (p.st === 'Подписан' ? '✔' : p.st === 'Отклонён' ? '✖' : '⏳') + ' ' + esc(p.role) + ': <b>' + esc(p.name) + '</b>' + (p.at ? ' <span class="muted">' + esc(p.at) + '</span>' : '') + (p.cm ? '<br><i class="muted">Причина: ' + esc(p.cm) + '</i>' : '') + '</div>';
     }).join('') + '</div>' +
-    (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : '');
+    (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : myTurn ? '<div class="card muted">На компьютере — только просмотр. Подписать или отклонить можно в приложении на телефоне.</div>' : '') +
+    (ME.admin && r.status === 'Подписан' && !r.pdf ? '<button class="btn gray" id="mkPdf" type="button">Сформировать подписанный PDF</button>' : '');
   var sb = $('sb'); fit(sb); setTimeout(function () { fit(sb); }, 300); window.onresize = function () { fit(sb); };
+  if ($('mkPdf')) $('mkPdf').onclick = function () { this.disabled = true; this.textContent = 'Формирую…'; makeFinal(r.id, html).then(function () { openAct(r.id); }); };
   if (!mineWait) return;
   if (!MOBILE) $('doSign').textContent = '✔ Подписать (подтвердить на телефоне)';
   $('doSign').onclick = function () {
@@ -329,12 +334,12 @@ function showConfirm(c) {
   var bio = !!ls('sg_bio');
   sheet('<div style="font-size:13px;color:var(--blue);font-weight:700">ЗАПРОС С КОМПЬЮТЕРА</div><h3 style="margin:4px 0 8px">Подписать АВР №' + esc(c.num) + ' от ' + esc(c.date) + '?</h3>' +
     '<div>' + esc(c.exe) + '</div><div class="muted">' + esc(c.obj) + ' · сумма <b>' + esc(c.total) + '</b></div>' +
-    (bio ? '' : '<label style="display:block;margin-top:10px">Личный код</label><input id="cCode" inputmode="numeric" maxlength="10">') +
+    (bio ? '' : '<label style="display:block;margin-top:10px">Пароль</label><input id="cCode" type="password" maxlength="40">') +
     '<button class="btn ok" id="cYes" type="button">' + (bio ? '✔ Подтвердить ' + BIO : '✔ Подтвердить') + '</button><button class="btn gray" id="cNo" type="button">Это не я / отменить</button><div class="err" id="cErr"></div>');
   $('cNo').onclick = function () { api({ sign_api: 'confirm', token: ls('sg_token'), cid: c.cid, yes: false }).catch(function () {}); CONF = null; closeSheet(); };
   $('cYes').onclick = function () {
     var b = this, code = $('cCode') ? $('cCode').value.trim() : '';
-    if (!bio && !code) { $('cErr').textContent = 'Введите личный код'; return; }
+    if (!bio && !code) { $('cErr').textContent = 'Введите пароль'; return; }
     (bio ? bioCheck() : Promise.resolve()).then(function () {
       b.disabled = true; b.textContent = 'Подписываю…';
       return api({ sign_api: 'confirm', token: ls('sg_token'), cid: c.cid, yes: true, code: code });
@@ -344,6 +349,56 @@ function showConfirm(c) {
       });
     }).catch(function (e) { b.disabled = false; b.textContent = '✔ Подтвердить'; $('cErr').textContent = e.name === 'NotAllowedError' ? BIO + ' — не подтверждено' : e.message; });
   };
+}
+/* ---------- смена пароля ---------- */
+function afterLogin() { if (ME.mustChange) showChangePw(); else offerBio(); }
+function showChangePw(msg) {
+  UNLOCKED = false; $('out').style.display = ''; $('staffBtn').style.display = 'none';
+  $('app').innerHTML = '<div class="card"><h3 style="margin:0 0 8px">Придумайте свой пароль</h3><p class="muted">Вы вошли со стандартным паролем. Чтобы продолжить работу, задайте личный пароль (не короче 4 знаков). Никому его не сообщайте — даже администратор его не увидит.</p>' +
+    '<label>Новый пароль</label><input id="p1" type="password" autocomplete="new-password"><label>Повторите пароль</label><input id="p2" type="password" autocomplete="new-password">' +
+    '<button class="btn" id="pGo" type="button">Сохранить и продолжить</button><div class="err" id="pErr">' + esc(msg || '') + '</div></div>';
+  $('pGo').onclick = function () {
+    var a = $('p1').value, b = $('p2').value, btn = this;
+    if (a !== b) { $('pErr').textContent = 'Пароли не совпадают'; return; }
+    if (a.length < 4) { $('pErr').textContent = 'Не короче 4 знаков'; return; }
+    if (a === '1234') { $('pErr').textContent = 'Придумайте свой пароль, не 1234'; return; }
+    btn.disabled = true;
+    api({ sign_api: 'set_password', token: ls('sg_token'), password: a }).then(function (j) {
+      ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; offerBio();
+    }).catch(function (e) { $('pErr').textContent = e.message; btn.disabled = false; });
+  };
+}
+/* ---------- сотрудники (только администратор) ---------- */
+$('staffBtn').onclick = showStaff;
+function showStaff() {
+  $('app').innerHTML = '<button class="btn gray" id="back" type="button" style="margin:0 0 10px">← К сообщениям</button>' +
+    '<div class="card"><h3 style="margin:0 0 8px">Сотрудники</h3><div class="muted">Новый сотрудник входит со своим ФИО и паролем <b>1234</b> и сразу меняет его на свой. Пароли никто не видит — их можно только сбросить на 1234.</div>' +
+    '<label style="display:block;margin-top:10px">ФИО</label><input id="sName"><label>Должность</label><input id="sRole" list="roles" placeholder="Руководитель проекта, Прораб, Мастер…">' +
+    '<datalist id="roles"><option value="Руководитель проекта"><option value="Руководитель ПТО"><option value="Инженеры ПТО"><option value="Прораб"><option value="Мастер"><option value="Директор"><option value="Заместитель директора"></datalist>' +
+    '<button class="btn" id="sAdd" type="button">+ Добавить сотрудника</button><div class="err" id="sErr"></div></div><div id="sList"><div class="center muted">Загрузка…</div></div>';
+  $('back').onclick = showInbox;
+  $('sAdd').onclick = function () {
+    var n = $('sName').value.trim(), r = $('sRole').value.trim(), b = this;
+    if (!n) { $('sErr').textContent = 'Введите ФИО'; return; }
+    b.disabled = true;
+    api({ sign_api: 'staff_add', token: ls('sg_token'), name: n, role: r }).then(showStaff).catch(function (e) { $('sErr').textContent = e.message; b.disabled = false; });
+  };
+  api({ sign_api: 'staff_list', token: ls('sg_token') }).then(function (j) {
+    $('sList').innerHTML = j.staff.map(function (u) {
+      return '<div class="card" style="padding:12px"><b>' + esc(u.name) + '</b>' + (u.admin ? ' <span class="badge" style="background:var(--acc);color:#fff">админ</span>' : '') +
+        '<div class="muted">' + esc(u.role || '—') + ' · ' + (u.last ? 'вход ' + esc(u.last) : 'ещё не входил') + (u.mustChange ? ' · пароль ещё 1234' : '') + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn gray" type="button" data-rs="' + esc(u.name) + '" style="margin:0">Сбросить пароль на 1234</button>' +
+        (u.admin ? '' : '<button class="btn no" type="button" data-del="' + esc(u.name) + '" style="margin:0">Удалить</button>') + '</div></div>';
+    }).join('');
+    [].forEach.call(document.querySelectorAll('[data-rs]'), function (b) { b.onclick = function () {
+      if (!confirm('Сбросить пароль сотрудника «' + b.dataset.rs + '» на 1234? При входе он должен будет придумать новый.')) return;
+      api({ sign_api: 'staff_reset', token: ls('sg_token'), name: b.dataset.rs }).then(function () { b.textContent = '✔ Сброшен на 1234'; b.disabled = true; }).catch(function (e) { alert(e.message); });
+    }; });
+    [].forEach.call(document.querySelectorAll('[data-del]'), function (b) { b.onclick = function () {
+      if (!confirm('Удалить сотрудника «' + b.dataset.del + '»? Он больше не сможет войти.')) return;
+      api({ sign_api: 'staff_del', token: ls('sg_token'), name: b.dataset.del }).then(showStaff).catch(function (e) { alert(e.message); });
+    }; });
+  }).catch(function (e) { $('sList').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; });
 }
 function sheet(h) { $('mdlIn').innerHTML = h; $('mdl').style.display = 'flex'; }
 function closeSheet() { $('mdl').style.display = 'none'; }
