@@ -1,5 +1,5 @@
 /* АВР — Подписи: кешируется только оболочка приложения; акты всегда берутся свежими. */
-var CACHE = 'avr-sign-v2';
+var CACHE = 'avr-sign-v3';
 var SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
@@ -13,7 +13,7 @@ self.addEventListener('fetch', function (e) {
   var u = e.request.url;
   if (e.request.method !== 'GET' || /script\.google|googleusercontent|docs\.google/.test(u)) return;
   if (e.request.mode === 'navigate') {
-    e.respondWith(fetch(e.request).then(function (r) { var c = r.clone(); caches.open(CACHE).then(function (x) { x.put('./index.html', c); }); return r; })
+    e.respondWith(fetch(e.request, { cache: 'no-store' }).then(function (r) { var c = r.clone(); caches.open(CACHE).then(function (x) { x.put('./index.html', c); }); return r; })
       .catch(function () { return caches.match('./index.html'); }));
     return;
   }
