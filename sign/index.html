@@ -205,6 +205,8 @@ function showInbox() {
   if ($('nOn')) $('nOn').onclick = function () { var b = this; ensurePush(true).then(function (ok) { if (ok) b.remove(); else b.textContent = 'Уведомления запрещены — разрешите их в настройках телефона'; }); };
   ensurePush(false);
   [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.onclick = function () { TAB = b.dataset.t; drawList(); }; });
+  if (!ITEMS.length) { try { ITEMS = JSON.parse(localStorage.getItem('sg_items_' + ME.key) || '[]'); } catch (e) { ITEMS = []; } }
+  if (ITEMS.length) drawList();
   load();
   clearInterval(POLL); POLL = setInterval(function () { if (UNLOCKED && !document.hidden) load(true); }, 30000);
 }
@@ -212,6 +214,7 @@ function load(quiet) {
   var before = pending(ITEMS).map(function (r) { return r.id; });
   return api({ sign_api: 'inbox', token: ls('sg_token') }).then(function (j) {
     ITEMS = j.items;
+    try { localStorage.setItem('sg_items_' + ME.key, JSON.stringify(ITEMS)); } catch (e) {}
     var p = pending(ITEMS);
     $('bd').innerHTML = p.length ? '<span class="badge">' + p.length + '</span>' : '';
     if (navigator.setAppBadge) { if (p.length) navigator.setAppBadge(p.length).catch(function () {}); else navigator.clearAppBadge().catch(function () {}); }
@@ -266,11 +269,21 @@ function fit(box) {
   var a = box.querySelector('.a4'); if (!a) return;
   var k = box.clientWidth / 794; a.style.transform = 'scale(' + k + ')'; box.style.height = (a.offsetHeight * k) + 'px';
 }
+var CUR_ACT = null;
+function dropAct(id) { try { localStorage.removeItem('sg_act_' + id); } catch (e) {} }
 function openAct(id) {
+  CUR_ACT = id;
   $('app').innerHTML = '<button class="btn gray" id="back" type="button" style="margin:0 0 10px">← К сообщениям</button><div id="act"><div class="center muted">Открываю акт…</div></div>';
   $('back').onclick = showInbox;
-  api({ sign_api: 'act', token: ls('sg_token'), id: id }).then(function (j) { drawAct(j.act, j.html); })
-    .catch(function (e) { $('act').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; });
+  var key = 'sg_act_' + id, c = null;
+  try { c = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+  if (!c) { var it = ITEMS.filter(function (x) { return x.id === id; })[0]; if (it && $('act')) $('act').innerHTML = '<div class="card"><b>АВР №' + esc(it.num) + ' от ' + esc(it.date) + '</b><div>' + esc(it.exe) + '</div>' + stLine(it) + '<div class="muted" style="margin-top:6px">Загружаю акт…</div></div>'; }
+  else drawAct(c.act, c.html);
+  api({ sign_api: 'act', token: ls('sg_token'), id: id }).then(function (j) {
+    try { localStorage.setItem(key, JSON.stringify({ act: j.act, html: j.html })); } catch (e) {}
+    if (!$('act') || CUR_ACT !== id || $('mdl').style.display === 'flex') return;
+    if (!c || JSON.stringify(c.act) !== JSON.stringify(j.act) || c.html !== j.html) drawAct(j.act, j.html);
+  }).catch(function (e) { if (!c && $('act') && CUR_ACT === id) $('act').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; });
 }
 function drawAct(r, html) {
   var myTurn = r.status === 'Ожидает' && r.mine && r.mine.st === '';
@@ -302,8 +315,8 @@ function drawAct(r, html) {
       closeSheet(); b.disabled = true; b.textContent = 'Подписываю…';
       var gate = ls('sg_bio') ? bioCheck() : Promise.resolve();
       gate.then(function () { return api({ sign_api: 'sign', token: ls('sg_token'), id: r.id }); }).then(function (j) {
-        if (j.allSigned) { b.textContent = 'Все подписали — сохраняю PDF…'; return makeFinal(r.id, j.html).then(function () { openAct(r.id); load(true); }); }
-        openAct(r.id); load(true);
+        if (j.allSigned) { b.textContent = 'Все подписали — сохраняю PDF…'; return makeFinal(r.id, j.html).then(function () { dropAct(r.id); openAct(r.id); load(true); }); }
+        dropAct(r.id); openAct(r.id); load(true);
       }).catch(function (e) { $('aErr').textContent = e.name === 'NotAllowedError' ? BIO + ' — не подтверждено' : e.message; b.disabled = false; b.textContent = '✔ Подписываю'; });
     };
   };
@@ -313,7 +326,7 @@ function drawAct(r, html) {
     $('mYes').onclick = function () {
       var cm = $('mCm').value.trim(); if (!cm) { $('mErr').textContent = 'Напишите причину'; return; }
       this.disabled = true;
-      api({ sign_api: 'reject', token: ls('sg_token'), id: r.id, comment: cm }).then(function () { closeSheet(); openAct(r.id); load(true); })
+      api({ sign_api: 'reject', token: ls('sg_token'), id: r.id, comment: cm }).then(function () { closeSheet(); dropAct(r.id); openAct(r.id); load(true); })
         .catch(function (e) { $('mErr').textContent = e.message; });
     };
   };
@@ -336,7 +349,7 @@ function pcSign(r, b) {
         left -= 3; if ($('wLeft')) $('wLeft').textContent = 'Ожидание: ' + Math.floor(left / 60) + ':' + ('0' + left % 60).slice(-2);
         if (left <= 0) { clearInterval(WAIT); if ($('wLeft')) $('wLeft').textContent = 'Время вышло. Нажмите «Подписать» ещё раз.'; return; }
         api({ sign_api: 'confirm_status', token: ls('sg_token'), cid: j.cid }).then(function (s) {
-          if (s.status === 'подписано') { clearInterval(WAIT); closeSheet(); openAct(r.id); load(true); }
+          if (s.status === 'подписано') { clearInterval(WAIT); closeSheet(); dropAct(r.id); openAct(r.id); load(true); }
           else if (s.status === 'отменено') { clearInterval(WAIT); if ($('wLeft')) $('wLeft').textContent = 'Отменено на телефоне.'; }
         }).catch(function () {});
       }, 3000);
