@@ -4,7 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#7c2a20">
+<meta name="theme-color" content="#2a2018">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <title>АВР — Нурзаман</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -91,7 +94,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 </style>
 </head>
 <body>
-<header><b>Акт выполненных работ</b><small id="st">Загружаю журнал договоров…</small></header>
+<header style="display:flex;align-items:center;gap:12px"><div><b>Акт выполненных работ</b><small id="st">Загружаю журнал договоров…</small></div><button id="inst" type="button" style="display:none;margin-left:auto;background:#7c2a20;border-color:#7c2a20;color:#fff;font-weight:bold">⬇ Установить на ПК</button></header>
 <div class="wrap">
 
 <div class="card">
@@ -580,6 +583,12 @@ $('share').addEventListener('click', function () {
   }).catch(function (e) { $('err').textContent = 'Ошибка: ' + e; }).then(function () { busy(b, false, 'Отправить в WhatsApp / Telegram'); });
 });
 preview();
+/* ---------- приложение на ПК ---------- */
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+var INST = null;
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); INST = e; $('inst').style.display = ''; });
+$('inst').addEventListener('click', function () { if (!INST) return; INST.prompt(); INST.userChoice.then(function () { INST = null; $('inst').style.display = 'none'; }); });
+window.addEventListener('appinstalled', function () { $('inst').style.display = 'none'; });
 </script>
 </body>
 </html>
