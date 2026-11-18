@@ -646,17 +646,16 @@ function toDrive(a, docxBlob, pdfBlob, printAt) {
 var SIGN_APP = 'https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/';
 function admKey() { try { return localStorage.getItem('avr_adm') || ''; } catch (e) { return ''; } }
 var FORCE_SIGN = false;
-function signOn() { return (FORCE_SIGN || $('toSign').checked) && !!admKey(); }
-try { $('toSign').checked = localStorage.getItem('avr_tosign') !== '0' && !!admKey(); } catch (e) {}
+function signOn() { return FORCE_SIGN || $('toSign').checked; }
+try { $('toSign').checked = localStorage.getItem('avr_tosign') !== '0'; } catch (e) {}
 $('toSign').addEventListener('change', function () {
-  if (this.checked && !admKey()) { this.checked = false; $('err').textContent = 'На этом компьютере нет доступа администратора.'; return; }
   try { localStorage.setItem('avr_tosign', this.checked ? '1' : '0'); } catch (e) {}
 });
 function signMsg(r) {
   if (!r) return '';
   if (r.error) return '<br><span style="color:var(--warn)">На подпись не отправлено: ' + esc(r.error) + '<\/span>';
   var h = '<br><b>' + (r.same ? 'Уже на подписи' : 'Отправлено на подпись') + ': ' + r.count + ' чел.<\/b>';
-  if (r.newUsers && r.newUsers.length) h += '<br>Новые подписанты — передайте им личный код и ссылку на приложение:<br>' + r.newUsers.map(function (u) { return esc(u.name) + ' — <b>' + esc(u.code) + '<\/b> ' + waLink(u.name, u.code); }).join('<br>');
+  if (r.newUsers && r.newUsers.length) h += '<br>Новые подписанты: ' + r.newUsers.map(function (u) { return esc(u.name); }).join(', ') + ' — их личные коды в закрытой таблице «АВР — подписи» на вашем Google Диске.';
   return h;
 }
 function waLink(name, code) {
@@ -710,12 +709,11 @@ function extraHtml(a, marks) {
   return '<div class="grp">Согласовано электронно:<\/div>' + a.extra.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2">' + (marks ? '{{S' + x.idx + '}}' : '') + '<\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
 }
 $('sendSign').addEventListener('click', function () {
-  if (!admKey()) { $('err').textContent = 'На этом компьютере нет доступа администратора.'; return; }
   var a = collect(); if (!a) return;
   var box = $('sendBox'); box.style.display = 'block'; box.innerHTML = '<div class="muted">Загружаю список…<\/div>';
-  api({ sign_api: 'admin_list', adminKey: admKey() }).then(function (j) {
+  api({ sign_api: 'users' }).then(function (j) {
     var inAct = {}; a.signers.forEach(function (x) { inAct[nk(x.name)] = 1; });
-    var others = j.users.filter(function (u) { return u.last && !inAct[nk(u.name)]; });
+    var others = j.users.filter(function (u) { return !inAct[nk(u.name)]; });
     var h = '<p class="step" style="margin:0 0 6px">Кому отправить АВР №' + esc(a.num) + '<\/p><div class="muted">Из акта (получают всегда):<\/div>' +
       a.signers.map(function (x) { return '<div>✔ ' + esc(x.role) + ': <b>' + esc(x.name) + '<\/b><\/div>'; }).join('') +
       '<div class="muted" style="margin-top:8px">Все, кто вошёл в приложение по своему коду:<\/div>' +
