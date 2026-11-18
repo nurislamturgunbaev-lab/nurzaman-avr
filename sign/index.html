@@ -269,9 +269,7 @@ function drawAct(r, html) {
   $('act').innerHTML = '<div class="card"><b>АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</b><div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + ' · сумма ' + esc(r.total) + '</div>' + stLine(r) +
     (r.pdf ? '<a class="btn gray" style="display:block;text-align:center;text-decoration:none" href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 Открыть подписанный PDF</a>' : '') + '</div>' +
     '<div class="sheetBox" id="sb"><div class="a4">' + html + '</div></div>' +
-    '<div class="card who"><b>Подписи</b>' + r.signers.map(function (p) {
-      return '<div>' + (p.st === 'Подписан' ? '✔' : p.st === 'Отклонён' ? '✖' : '⏳') + ' ' + esc(p.role) + ': <b>' + esc(p.name) + '</b>' + (p.at ? ' <span class="muted">' + esc(p.at) + '</span>' : '') + (p.cm ? '<br><i class="muted">Причина: ' + esc(p.cm) + '</i>' : '') + '</div>';
-    }).join('') + '</div>' +
+    r.signers.filter(function (p) { return p.cm; }).map(function (p) { return '<div class="card err">✖ Отклонил ' + esc(p.name) + ': ' + esc(p.cm) + '</div>'; }).join('') +
     (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : '') +
     (ME.admin ? '<div style="display:flex;gap:8px"><button class="btn gray" type="button" data-pp="office">🖨 Печать — Офис</button><button class="btn gray" type="button" data-pp="shtab">🖨 Печать — Штаб</button></div><div class="muted" id="ppMsg" style="margin-top:6px"></div>' : '') +
     (ME.admin && r.status === 'Подписан' && !r.pdf ? '<button class="btn gray" id="mkPdf" type="button">Сформировать подписанный PDF</button>' : '');
