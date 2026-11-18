@@ -90,6 +90,8 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 .a4 .grp{font-style:italic;margin:26px 0 10px}
 .a4 .sg2{display:grid;grid-template-columns:180px 140px 1fr;column-gap:12px;align-items:end;margin:0 0 14px;font-weight:700}
 .a4 .sg2 .ln2{border-bottom:1px solid #000;margin-bottom:4px}
+.a4 .es{display:block;color:#1a4fa0;font-size:9px;font-weight:600;line-height:1.15;text-align:center;border:1px solid #1a4fa0;border-radius:3px;padding:1px 2px;margin-bottom:2px;white-space:nowrap}.a4 .es.rj{color:#a33b2b;border-color:#a33b2b}
+.adm table{width:100%;border-collapse:collapse;font-size:13px}.adm td{border-bottom:1px solid var(--line);padding:5px 4px;vertical-align:top}.adm .st{font-weight:bold}.adm .st.ok{color:#2e7d32}.adm .st.no{color:var(--warn)}.adm small{color:var(--muted)}
 @media print{@page{size:A4;margin:0}html,body{height:auto;background:#fff}body>*:not(#sheet){display:none!important}#sheet{position:static;min-height:0;width:100%}}
 #sheet{min-height:0}
 </style>
@@ -156,6 +158,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   <button class="share" id="share" type="button">Отправить в WhatsApp / Telegram</button>
   <div style="grid-column:1/-1;display:flex;gap:8px;align-items:stretch"><select id="rp" style="font:inherit;font-size:16px;border-radius:8px;padding:0 10px;border:1px solid #b9c4bb"><option value="office">Офис</option><option value="shtab">Штаб</option></select><button id="rprint" type="button" style="flex:1">🖨 Отправить на принтер</button></div>
 </div>
+<label class="tax" style="margin-top:10px"><input type="checkbox" id="toSign"> 📲 Отправлять на подпись в телефон (руководитель проекта, ПТО, прораб, мастер, подрядчик) — при сохранении, печати или отправке на принтер</label>
 <div class="err" id="err"></div>
 <div class="ok" id="ok"></div>
 <div class="muted" id="drv" style="margin-top:4px"></div>
@@ -167,6 +170,14 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 <div class="card" style="margin-top:14px">
   <p class="step"><i>VII.</i> Предпросмотр акта</p>
   <div id="pvBox"><div id="pv" class="a4"></div></div>
+</div>
+<div class="card adm" style="margin-top:14px">
+  <details id="admBox">
+    <summary><b>VIII. Подписи в телефоне — только для вас</b></summary>
+    <div class="row2" style="margin-top:8px"><input id="admKey" type="password" placeholder="Пароль администратора" autocomplete="off"><button type="button" id="admGo">Показать</button></div>
+    <div class="muted" style="margin:6px 0">Приложение для подписантов (открыть на телефоне): <a href="https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/" target="_blank" rel="noopener">https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/</a></div>
+    <div id="admOut"></div>
+  </details>
 </div>
 </div>
 
@@ -474,9 +485,13 @@ loadSig();
 function gather() {
   var a = {
     num: $('num').value.trim(), date: ruDate($('date').value), objBase: $('obj').value.trim(), blk: $('blk').value.trim(), flr: $('flr').value.trim(), title: $('title').value.trim(), giver: $('giver').value.trim(),
-    exe: $('exe').value.trim(), approve: SIG.approve.filter(function (x) { return x.role || x.name; }), accept: SIG.accept.filter(function (x) { return x.role || x.name; }),
+    exe: $('exe').value.trim(), approve: SIG.approve.filter(function (x) { return x.role || x.name; }).map(function (x) { return { role: x.role, name: x.name }; }), accept: SIG.accept.filter(function (x) { return x.role || x.name; }).map(function (x) { return { role: x.role, name: x.name }; }),
     rows: ROWS.filter(function (r) { return String(r.name).trim(); }).map(function (r) { return { name: String(r.name).trim(), unit: String(r.unit).trim(), qty: num(r.qty), price: num(r.price), sum: rowSum(r), extra: !!r.extra }; })
   };
+  var sid = 0; a.signers = [];
+  a.approve.forEach(function (x) { if (x.name && !/директор|заместител/i.test(x.role)) { x.sid = sid++; a.signers.push({ name: x.name, role: x.role.replace(/:$/, ''), idx: x.sid }); } });
+  a.accept.forEach(function (x) { if (x.name) { x.sid = sid++; a.signers.push({ name: x.name, role: x.role.replace(/:$/, ''), idx: x.sid }); } });
+  if (a.exe) { a.exeSid = sid++; a.signers.push({ name: a.exe, role: 'Исполнитель (подрядчик)', idx: a.exeSid }); }
   a.obj = a.objBase + (a.blk ? ', ' + (/^блок/i.test(a.blk) ? a.blk : 'блок ' + a.blk) : '') + (a.flr ? ', ' + (/^\d+$/.test(a.flr) ? a.flr + ' этаж' : a.flr) : '');
   a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.net = Math.round(a.net * 100) / 100;
   a.taxOn = $('tax').checked; a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
@@ -496,15 +511,16 @@ function collect() {
 }
 
 /* ---------- PDF ---------- */
-function sheetHtml(a) {
-  var ap = a.approve.map(function (x) { return '<div class="pl"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
+function sheetHtml(a, marks) {
+  function mk(i) { return marks && i != null ? '{{S' + i + '}}' : ''; }
+  var ap = a.approve.map(function (x) { return '<div class="pl"><span>' + esc(x.role) + '<\/span><span class="ln2">' + mk(x.sid) + '<\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
   var n1 = 0, n2 = 0;
   var rows = a.rows.map(function (r) { var no = r.extra ? ++n2 : ++n1; return (r.extra && n2 === 1 ? '<tr><td colspan="6" class="l"><b>Дополнительные работы<\/b><\/td><\/tr>' : '') + '<tr><td>' + no + '<\/td><td class="l">' + esc(r.name) + '<\/td><td>' + esc(r.unit) + '<\/td><td>' + fmt(r.qty) + '<\/td><td class="n">' + fmt(r.price) + '<\/td><td class="n"><b>' + fmt(r.sum) + '<\/b><\/td><\/tr>'; }).join('');
   var foot = a.taxOn
     ? '<tr><td colspan="5" class="n">Итого без налога<\/td><td class="n">' + fmt(a.net) + '<\/td><\/tr><tr><td colspan="5" class="n">Единый налог 4%<\/td><td class="n">' + fmt(a.tax) + '<\/td><\/tr>'
     : '';
   foot += '<tr><td colspan="5" class="n"><b>Итого<\/b><\/td><td class="n"><b>' + fmt(a.total) + '<\/b><\/td><\/tr>';
-  var acc = a.accept.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2"><\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
+  var acc = a.accept.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2">' + mk(x.sid) + '<\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
   if (isNaN(a.total)) a.total = 0;
   return '<div class="ap"><div class="h">Утверждаю<\/div>' + ap + '<\/div>' +
     '<p class="c" style="margin:22px 0 0"><i>по объекту: ' + esc(a.obj) + '<\/i><\/p>' +
@@ -514,7 +530,7 @@ function sheetHtml(a) {
     '<p style="margin-top:22px">Всего выполнено работ на сумму: ' + esc(words(a.total)) + '<\/p>' +
     '<div class="grp">Работы приняли:<\/div>' + acc +
     '<div class="grp">Работы сдал:<\/div>' +
-    '<div class="sg2"><span>Исполнитель<\/span><span class="ln2"><\/span><span class="nm">' + esc(a.exe) + (a.giver ? ', ' + esc(a.giver) : '') + '<\/span><\/div>';
+    '<div class="sg2"><span>Исполнитель<\/span><span class="ln2">' + mk(a.exeSid) + '<\/span><span class="nm">' + esc(a.exe) + (a.giver ? ', ' + esc(a.giver) : '') + '<\/span><\/div>';
 }
 function makePdf(a) {
   var el = $('sheet'); el.innerHTML = sheetHtml(a);
@@ -604,10 +620,10 @@ function b64(blob) { return new Promise(function (ok, no) { var r = new FileRead
 var SENT = {};
 function toDrive(a, docxBlob, pdfBlob, printAt) {
   if (!UPLOAD_URL) return Promise.resolve(null);
-  var key = a.file + '|' + a.total + '|' + (printAt || ''); if (SENT[key]) return Promise.resolve(SENT[key]);
+  var key = a.file + '|' + a.total + '|' + (printAt || '') + '|' + signOn(); if (SENT[key]) return Promise.resolve(SENT[key]);
   $('drv').textContent = 'Сохраняю в Google Диск…';
   return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
-    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', files: [
+    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', adminKey: signOn() ? admKey() : '', signReq: signOn() ? { key: a.file, date: a.date, num: a.num, obj: a.obj, blk: a.blk, flr: a.flr, exe: a.exe, total: fmt(a.total), html: sheetHtml(a, true), signers: a.signers } : null, files: [
       { name: a.file + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: d[0] },
       { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }],
       log: { key: a.file, date: a.date, num: a.num, exe: a.exe, obj: a.objBase, blk: a.blk, flr: a.flr, total: a.total, rows: a.rows, sig: { approve: a.approve, accept: a.accept } } }) });
@@ -615,9 +631,76 @@ function toDrive(a, docxBlob, pdfBlob, printAt) {
     if (!j || !j.ok) throw new Error(j && j.error || 'нет ответа');
     SENT[key] = j;
     loadLog(showPrev);
-    $('drv').innerHTML = 'Сохранено в Google Диск, папка <b>' + esc(j.folder) + '<\/b>' + (j.folderUrl ? ' — <a href="' + esc(j.folderUrl) + '" target="_blank" rel="noopener">открыть<\/a>' : '') + (j.queued ? '<br><b>Отправлено на принтер: ' + esc(j.queued) + '<\/b> (напечатается, если тот компьютер включён)' : '');
+    $('drv').innerHTML = 'Сохранено в Google Диск, папка <b>' + esc(j.folder) + '<\/b>' + (j.folderUrl ? ' — <a href="' + esc(j.folderUrl) + '" target="_blank" rel="noopener">открыть<\/a>' : '') + (j.queued ? '<br><b>Отправлено на принтер: ' + esc(j.queued) + '<\/b> (напечатается, если тот компьютер включён)' : '') + signMsg(j.sign);
     return j;
   }).catch(function (e) { $('drv').textContent = 'В Google Диск не сохранилось (' + (e && e.message || e) + '). Файлы на устройстве есть.'; });
+}
+/* ---------- подписи в телефоне (администратор) ---------- */
+var SIGN_APP = 'https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/';
+function admKey() { try { return localStorage.getItem('avr_adm') || ''; } catch (e) { return ''; } }
+function signOn() { return $('toSign').checked && !!admKey(); }
+try { $('toSign').checked = localStorage.getItem('avr_tosign') !== '0' && !!admKey(); } catch (e) {}
+$('toSign').addEventListener('change', function () {
+  if (this.checked && !admKey()) { this.checked = false; $('admBox').open = true; $('admKey').focus(); $('err').textContent = 'Чтобы отправлять на подпись, введите пароль администратора в разделе VIII.'; return; }
+  try { localStorage.setItem('avr_tosign', this.checked ? '1' : '0'); } catch (e) {}
+});
+function signMsg(r) {
+  if (!r) return '';
+  if (r.error) return '<br><span style="color:var(--warn)">На подпись не отправлено: ' + esc(r.error) + '<\/span>';
+  var h = '<br><b>' + (r.same ? 'Уже на подписи' : 'Отправлено на подпись') + ': ' + r.count + ' чел.<\/b>';
+  if (r.newUsers && r.newUsers.length) h += '<br>Новые подписанты — передайте им личный код и ссылку на приложение:<br>' + r.newUsers.map(function (u) { return esc(u.name) + ' — <b>' + esc(u.code) + '<\/b> ' + waLink(u.name, u.code); }).join('<br>');
+  return h;
+}
+function waLink(name, code) {
+  var t = 'АВР — подписи. Установите приложение на телефон: ' + SIGN_APP + ' \nВход: ' + name + ', личный код: ' + code;
+  return '<a href="https://wa.me/?text=' + encodeURIComponent(t) + '" target="_blank" rel="noopener">WhatsApp<\/a>';
+}
+function api(body) { return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) throw new Error(j.error || 'ошибка'); return j; }); }
+$('admKey').value = admKey();
+$('admGo').addEventListener('click', function () {
+  var k = $('admKey').value.trim(); if (!k) return;
+  $('admOut').innerHTML = '<div class="muted">Загружаю…<\/div>';
+  api({ sign_api: 'admin_list', adminKey: k }).then(function (j) {
+    try { localStorage.setItem('avr_adm', k); } catch (e) {}
+    if (!$('toSign').checked) { try { if (localStorage.getItem('avr_tosign') !== '0') $('toSign').checked = true; } catch (e) {} }
+    ADM = j; renderAdm();
+  }).catch(function (e) { $('admOut').innerHTML = '<div class="err">' + esc(e.message) + '<\/div>'; });
+});
+var ADM = null;
+function stc(s) { return s === 'Подписан' ? 'ok' : s === 'Отклонён' ? 'no' : ''; }
+function renderAdm() {
+  var h = '<p class="step" style="margin-top:10px">Акты на подписи<\/p>';
+  if (!ADM.items.length) h += '<div class="muted">Пока нет.<\/div>';
+  else h += '<table>' + ADM.items.map(function (r) {
+    var who = r.signers.map(function (p) { return (p.st === 'Подписан' ? '✔ ' : p.st === 'Отклонён' ? '✖ ' : '⏳ ') + esc(p.name) + (p.cm ? ' — <i>' + esc(p.cm) + '<\/i>' : ''); }).join('<br>');
+    return '<tr><td><b>' + esc(r.date) + ' №' + esc(r.num) + '<\/b><br>' + esc(r.exe) + '<br><small>' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && 'эт. ' + r.flr].filter(Boolean).join(', ')) + ' · ' + esc(r.total) + '<\/small><\/td>' +
+      '<td><span class="st ' + stc(r.status) + '">' + esc(r.status) + ' ' + r.done + '/' + r.all + '<\/span><br><small>' + who + '<\/small>' +
+      (r.pdf ? '<br><a href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 Подписанный PDF<\/a>' : r.status === 'Подписан' ? '<br><button type="button" data-fin="' + esc(r.id) + '">Сформировать PDF<\/button>' : '') + '<\/td><\/tr>';
+  }).join('') + '<\/table>';
+  h += '<p class="step" style="margin-top:14px">Подписанты и личные коды<\/p><table>' + ADM.users.map(function (u) {
+    return '<tr><td>' + esc(u.name) + '<br><small>' + esc(u.role) + (u.last ? ' · вход ' + esc(u.last) : ' · ещё не входил') + '<\/small><\/td><td><b>' + esc(u.code) + '<\/b> ' + waLink(u.name, u.code) + '<br><button type="button" data-code="' + esc(u.name) + '">Новый код<\/button><\/td><\/tr>';
+  }).join('') + '<\/table>';
+  $('admOut').innerHTML = h;
+}
+$('admOut').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-code]');
+  if (b) { b.disabled = true; api({ sign_api: 'admin_code', adminKey: admKey(), name: b.dataset.code }).then(function () { $('admGo').click(); }).catch(function (x) { alert(x.message); }); return; }
+  b = e.target.closest('[data-fin]'); if (!b) return;
+  b.disabled = true; b.textContent = 'Формирую…';
+  api({ sign_api: 'admin_act', adminKey: admKey(), id: b.dataset.fin }).then(function (j) { return pdfFromHtml(j.html); })
+    .then(function (blob) { return b64(blob); })
+    .then(function (d) { return api({ sign_api: 'admin_final', adminKey: admKey(), id: b.dataset.fin, pdf: d }); })
+    .then(function () { $('admGo').click(); }).catch(function (x) { b.textContent = 'Ошибка: ' + x.message; });
+});
+function pdfFromHtml(html) {
+  var el = $('sheet'); el.innerHTML = html;
+  return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
+    var pdf = new jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var k = Math.min(pw / cv.width, ph / cv.height);
+    pdf.addImage(cv.toDataURL('image/jpeg', 0.92), 'JPEG', (pw - cv.width * k) / 2, 0, cv.width * k, cv.height * k);
+    return pdf.output('blob');
+  });
 }
 try { if (localStorage.getItem('avr_rp')) $('rp').value = localStorage.getItem('avr_rp'); } catch (e) {}
 $('rp').addEventListener('change', function () { try { localStorage.setItem('avr_rp', this.value); } catch (e) {} });
