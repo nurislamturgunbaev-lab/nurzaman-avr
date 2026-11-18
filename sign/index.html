@@ -19,8 +19,6 @@ header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:
 header b{font-size:17px;flex:1}
 header button{background:transparent;border:0;color:#fff;font-size:15px;padding:6px}
 main{padding:12px 12px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;margin:0 auto}
-@media (min-width:900px){main{max-width:920px;padding-top:20px}.msg{margin-right:0}.modal{align-items:center;justify-content:center}.modal .in{max-width:520px;border-radius:18px}}
-#inst{display:none;background:#fff;color:var(--acc);border-radius:8px;font-weight:700;font-size:13px;padding:6px 10px}
 .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
 input,textarea{width:100%;font:inherit;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0 12px}
 label{font-size:13px;color:var(--muted)}
@@ -69,7 +67,7 @@ button{font:inherit;cursor:pointer}
 </style>
 </head>
 <body>
-<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="inst" type="button">⬇ Установить</button><button id="out" type="button" style="display:none">Выйти</button></header>
+<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="out" type="button" style="display:none">Выйти</button></header>
 <main id="app"><div class="center muted">Загрузка…</div></main>
 <div class="modal" id="mdl"><div class="in" id="mdlIn"></div></div>
 <div id="hidden" class="a4"></div>
@@ -90,14 +88,11 @@ function api(body) {
 var ME = null, ITEMS = [], TAB = 'wait', UNLOCKED = false, HIDDEN_AT = 0;
 try { ME = JSON.parse(ls('sg_me') || 'null'); } catch (e) {}
 
-/* ---------- телефон и компьютер ---------- */
+/* ---------- только телефон ---------- */
 var MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
-var BIO = MOBILE ? 'Face ID / отпечаток' : 'Windows Hello (PIN, лицо или палец)';
-var INST = null;
-window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); INST = e; $('inst').style.display = 'inline-block'; });
-$('inst').onclick = function () { if (!INST) return; INST.prompt(); INST.userChoice.then(function () { INST = null; $('inst').style.display = 'none'; }); };
-window.addEventListener('appinstalled', function () { $('inst').style.display = 'none'; });
-start();
+if (!MOBILE) {
+  $('app').innerHTML = '<div class="card center"><h3>Приложение только для телефона</h3><p class="muted">Откройте эту ссылку на телефоне:<br><b>' + esc(location.href.split('?')[0]) + '</b></p></div>';
+} else start();
 
 function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
@@ -114,7 +109,7 @@ function showLogin(msg) {
     '<label>Личный код</label><input id="lCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10">' +
     '<button class="btn" id="lGo" type="button">Войти</button><div class="err" id="lErr">' + esc(msg || '') + '</div>' +
     '<p class="muted">Личный код выдаёт ответственный за АВР. Никому его не сообщайте.</p></div>' +
-    (standalone ? '' : '<div class="card muted"><b>Установите приложение:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение».<br>Компьютер — Chrome или Edge → кнопка «⬇ Установить» вверху или значок установки в адресной строке; появится значок на рабочем столе.</div>');
+    (standalone ? '' : '<div class="card muted"><b>Установите на телефон:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение» / «Добавить на главный экран».</div>');
   $('lGo').onclick = function () {
     var b = this; b.disabled = true; $('lErr').textContent = '';
     api({ sign_api: 'login', name: $('lName').value, code: $('lCode').value, device: navigator.userAgent.slice(0, 120) }).then(function (j) {
@@ -134,7 +129,7 @@ function unb64(s) { return Uint8Array.from(atob(s), function (c) { return c.char
 function offerBio() {
   bioAvailable().then(function (ok) {
     if (!ok || ls('sg_bio')) return showInbox();
-    $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔐</div><h3>Входить через ' + BIO + '?</h3><p class="muted">Код больше вводить не придётся.</p>' +
+    $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔐</div><h3>Входить по Face ID или отпечатку?</h3><p class="muted">Код больше вводить не придётся — только лицо или палец.</p>' +
       '<button class="btn" id="bOn" type="button">Включить</button><button class="btn gray" id="bNo" type="button">Не сейчас</button><div class="err" id="bErr"></div></div>';
     $('bNo').onclick = showInbox;
     $('bOn').onclick = function () {
@@ -156,7 +151,7 @@ function showLock() {
   UNLOCKED = false; $('out').style.display = 'none';
   var bio = !!ls('sg_bio');
   $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔒</div><h3>' + esc(ME.name) + '</h3>' +
-    (bio ? '<button class="btn" id="kBio" type="button">Войти через ' + BIO + '</button>' : '') +
+    (bio ? '<button class="btn" id="kBio" type="button">Войти по Face ID / отпечатку</button>' : '') +
     '<label style="display:block;text-align:left;margin-top:14px">Личный код</label><input id="kCode" inputmode="numeric" maxlength="10">' +
     '<button class="btn ' + (bio ? 'gray' : '') + '" id="kGo" type="button">Войти по коду</button><div class="err" id="kErr"></div>' +
     '<p><a href="#" id="kOther" class="muted">Войти другим человеком</a></p></div>';
@@ -263,7 +258,7 @@ function drawAct(r, html) {
       gate.then(function () { return api({ sign_api: 'sign', token: ls('sg_token'), id: r.id }); }).then(function (j) {
         if (j.allSigned) { b.textContent = 'Все подписали — сохраняю PDF…'; return makeFinal(r.id, j.html).then(function () { openAct(r.id); load(true); }); }
         openAct(r.id); load(true);
-      }).catch(function (e) { $('aErr').textContent = e.name === 'NotAllowedError' ? BIO + ' — не подтверждено' : e.message; b.disabled = false; b.textContent = '✔ Подписываю'; });
+      }).catch(function (e) { $('aErr').textContent = e.name === 'NotAllowedError' ? 'Face ID / отпечаток не подтверждён' : e.message; b.disabled = false; b.textContent = '✔ Подписываю'; });
     };
   };
   $('doRej').onclick = function () {
