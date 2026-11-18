@@ -150,17 +150,22 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   </details>
 </div>
 
-<p class="step" style="margin-top:4px"><i>VI.</i> Печать</p>
-<div class="go">
+<div class="go" style="margin-top:4px">
+  <button class="pri" type="button" data-rp="office">🖨 Печать — Офис</button>
+  <button class="pri" type="button" data-rp="shtab">🖨 Печать — Штаб</button>
+</div>
+<details class="card" id="viBox" style="margin-top:10px">
+<summary class="step" style="margin:0;cursor:pointer"><i>VI.</i> Печать, сохранение и отправка (нажмите, чтобы открыть)</summary>
+<div class="go" style="margin-top:10px">
   <button class="pri" id="pdf" type="button">Сохранить акт (Word + PDF)</button>
   <button class="pri" id="print" type="button">Печать</button>
   <button id="word" type="button" style="grid-column:1/-1">Только Word (для правки)</button>
   <button class="share" id="share" type="button">Отправить в WhatsApp / Telegram</button>
-  <div style="grid-column:1/-1;display:flex;gap:8px;align-items:stretch"><select id="rp" style="flex:0 0 130px;width:130px;font:inherit;font-size:16px;border-radius:8px;padding:0 10px;border:1px solid #b9c4bb"><option value="office">Офис</option><option value="shtab">Штаб</option></select><button id="rprint" type="button" style="flex:1">🖨 Отправить на принтер</button></div>
 </div>
 <label class="tax" style="margin-top:10px"><input type="checkbox" id="toSign"> 📲 Отправлять на подпись в телефон (руководитель проекта, ПТО, прораб, мастер, подрядчик) — при сохранении, печати или отправке на принтер</label>
 <button type="button" id="sendSign" class="pri" style="width:100%;margin-top:8px;padding:14px;font-weight:bold;font-size:16px">📲 Отправить на подпись в приложение</button>
 <div id="sendBox" class="card adm" style="display:none;margin-top:8px"></div>
+</details>
 <div class="err" id="err"></div>
 <div class="ok" id="ok"></div>
 <div class="muted" id="drv" style="margin-top:4px"></div>
@@ -739,12 +744,13 @@ function pdfFromHtml(html) {
     return pdf.output('blob');
   });
 }
-try { if (localStorage.getItem('avr_rp')) $('rp').value = localStorage.getItem('avr_rp'); } catch (e) {}
-$('rp').addEventListener('change', function () { try { localStorage.setItem('avr_rp', this.value); } catch (e) {} });
-$('rprint').addEventListener('click', function () {
-  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Отправляю на принтер…');
-  Promise.all([makeDocx(a), makePdf(a)]).then(function (bl) { return toDrive(a, bl[0], bl[1], $('rp').value); })
-    .catch(function (e) { $('err').textContent = 'Не получилось: ' + e; }).then(function () { busy(b, false, '🖨 Отправить на принтер'); });
+[].forEach.call(document.querySelectorAll('[data-rp]'), function (b) {
+  var label = b.textContent;
+  b.addEventListener('click', function () {
+    var a = collect(); if (!a) return; busy(b, true, 'Отправляю…');
+    Promise.all([makeDocx(a), makePdf(a)]).then(function (bl) { return toDrive(a, bl[0], bl[1], b.dataset.rp); })
+      .catch(function (e) { $('err').textContent = 'Не получилось: ' + e; }).then(function () { busy(b, false, label); });
+  });
 });
 $('print').addEventListener('click', function () {
   var a = collect(); if (!a) return;
