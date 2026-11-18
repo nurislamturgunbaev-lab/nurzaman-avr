@@ -1,5 +1,5 @@
 /* АВР — Подписи: кешируется только оболочка приложения; акты всегда берутся свежими. */
-var CACHE = 'avr-sign-v3';
+var CACHE = 'avr-sign-v4';
 var SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
@@ -25,7 +25,7 @@ self.addEventListener('notificationclick', function (e) {
 });
 
 /* Push: сообщение без текста — телефон сам спрашивает сервер, что случилось. */
-var API = 'https://script.google.com/macros/s/AKfycbxFp_OBRiSddYr_LuvVpFf4MkXF4YE1vnkpNKBNdEw4RH4u40My3YzzFAHMRdcI3KR3/exec';
+var API = 'https://avr-sign.nurislamturgunbaev.workers.dev/';
 self.addEventListener('push', function (e) {
   e.waitUntil(caches.open('avr-sign-auth').then(function (c) { return c.match(new URL('./__tok', self.registration.scope).href); })
     .then(function (r) { return r ? r.text() : ''; })
