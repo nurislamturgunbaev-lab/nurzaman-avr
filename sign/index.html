@@ -265,7 +265,7 @@ function openAct(id) {
 }
 function drawAct(r, html) {
   var myTurn = r.status === 'Ожидает' && r.mine && r.mine.st === '';
-  var mineWait = myTurn && (MOBILE || ME.admin);
+  var mineWait = myTurn && MOBILE;
   $('act').innerHTML = '<div class="card"><b>АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</b><div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + ' · сумма ' + esc(r.total) + '</div>' + stLine(r) +
     (r.pdf ? '<a class="btn gray" style="display:block;text-align:center;text-decoration:none" href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 Открыть подписанный PDF</a>' : '') + '</div>' +
     '<div class="sheetBox" id="sb"><div class="a4">' + html + '</div></div>' +
