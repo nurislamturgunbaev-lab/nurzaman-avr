@@ -178,9 +178,9 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   <p class="step"><i>VII.</i> Предпросмотр акта</p>
   <div id="pvBox"><div id="pv" class="a4"></div></div>
 </div>
-<div class="card adm" style="margin-top:14px">
+<div class="card adm" id="admCard" style="margin-top:14px;display:none">
   <details id="admBox">
-    <summary><b>VIII. Подписи в телефоне — только для вас</b></summary>
+    <summary><b>Подписи в телефоне — статусы и коды</b></summary>
     <div class="row2" style="margin-top:8px"><input id="admKey" type="password" placeholder="Пароль администратора" autocomplete="off"><button type="button" id="admGo">Показать</button></div>
     <div class="muted" style="margin:6px 0">Приложение для подписантов (открыть на телефоне): <a href="https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/" target="_blank" rel="noopener">https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/</a></div>
     <div id="admOut"></div>
@@ -649,7 +649,7 @@ var FORCE_SIGN = false;
 function signOn() { return (FORCE_SIGN || $('toSign').checked) && !!admKey(); }
 try { $('toSign').checked = localStorage.getItem('avr_tosign') !== '0' && !!admKey(); } catch (e) {}
 $('toSign').addEventListener('change', function () {
-  if (this.checked && !admKey()) { this.checked = false; $('admBox').open = true; $('admKey').focus(); $('err').textContent = 'Чтобы отправлять на подпись, введите пароль администратора в разделе VIII.'; return; }
+  if (this.checked && !admKey()) { this.checked = false; $('err').textContent = 'На этом компьютере нет доступа администратора.'; return; }
   try { localStorage.setItem('avr_tosign', this.checked ? '1' : '0'); } catch (e) {}
 });
 function signMsg(r) {
@@ -664,7 +664,10 @@ function waLink(name, code) {
   return '<a href="https://wa.me/?text=' + encodeURIComponent(t) + '" target="_blank" rel="noopener">WhatsApp<\/a>';
 }
 function api(body) { return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) throw new Error(j.error || 'ошибка'); return j; }); }
-$('admKey').value = admKey();
+/* раздел администратора виден только по ссылке с #admin в конце */
+function admShow() { if (location.hash === '#admin') { $('admCard').style.display = 'block'; $('admBox').open = true; } }
+admShow(); window.addEventListener('hashchange', admShow);
+$('admKey').value = '';
 $('admGo').addEventListener('click', function () {
   var k = $('admKey').value.trim(); if (!k) return;
   $('admOut').innerHTML = '<div class="muted">Загружаю…<\/div>';
@@ -707,7 +710,7 @@ function extraHtml(a, marks) {
   return '<div class="grp">Согласовано электронно:<\/div>' + a.extra.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2">' + (marks ? '{{S' + x.idx + '}}' : '') + '<\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
 }
 $('sendSign').addEventListener('click', function () {
-  if (!admKey()) { $('admBox').open = true; $('admKey').focus(); $('err').textContent = 'Сначала введите пароль администратора в разделе VIII.'; return; }
+  if (!admKey()) { $('err').textContent = 'На этом компьютере нет доступа администратора.'; return; }
   var a = collect(); if (!a) return;
   var box = $('sendBox'); box.style.display = 'block'; box.innerHTML = '<div class="muted">Загружаю список…<\/div>';
   api({ sign_api: 'admin_list', adminKey: admKey() }).then(function (j) {
