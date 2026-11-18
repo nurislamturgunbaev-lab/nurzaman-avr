@@ -162,7 +162,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   <button id="word" type="button" style="grid-column:1/-1">Только Word (для правки)</button>
   <button class="share" id="share" type="button">Отправить в WhatsApp / Telegram</button>
 </div>
-<label class="tax" style="margin-top:10px"><input type="checkbox" id="toSign"> 📲 Отправлять на подпись в телефон (руководитель проекта, ПТО, прораб, мастер, подрядчик) — при сохранении, печати или отправке на принтер</label>
+<label class="tax" style="margin-top:10px"><input type="checkbox" id="toSign"> 📲 Отправлять на подпись в телефон (руководитель проекта, ПТО, прораб, мастер; директор и заместитель — только просмотр) — при сохранении, печати или отправке на принтер</label>
 <button type="button" id="sendSign" class="pri" style="width:100%;margin-top:8px;padding:14px;font-weight:bold;font-size:16px">📲 Отправить на подпись в приложение</button>
 <div id="sendBox" class="card adm" style="display:none;margin-top:8px"></div>
 </details>
@@ -495,10 +495,9 @@ function gather() {
     exe: $('exe').value.trim(), approve: SIG.approve.filter(function (x) { return x.role || x.name; }).map(function (x) { return { role: x.role, name: x.name }; }), accept: SIG.accept.filter(function (x) { return x.role || x.name; }).map(function (x) { return { role: x.role, name: x.name }; }),
     rows: ROWS.filter(function (r) { return String(r.name).trim(); }).map(function (r) { return { name: String(r.name).trim(), unit: String(r.unit).trim(), qty: num(r.qty), price: num(r.price), sum: rowSum(r), extra: !!r.extra }; })
   };
-  var sid = 0; a.signers = [];
-  a.approve.forEach(function (x) { if (x.name && !/директор|заместител/i.test(x.role)) { x.sid = sid++; a.signers.push({ name: x.name, role: x.role.replace(/:$/, ''), idx: x.sid }); } });
+  var sid = 0; a.signers = []; a.viewers = [];
+  a.approve.forEach(function (x) { if (!x.name) return; if (/директор|заместител/i.test(x.role)) a.viewers.push({ name: x.name, role: x.role.replace(/:$/, ''), view: true }); else { x.sid = sid++; a.signers.push({ name: x.name, role: x.role.replace(/:$/, ''), idx: x.sid }); } });
   a.accept.forEach(function (x) { if (x.name) { x.sid = sid++; a.signers.push({ name: x.name, role: x.role.replace(/:$/, ''), idx: x.sid }); } });
-  if (a.exe) { a.exeSid = sid++; a.signers.push({ name: a.exe, role: 'Исполнитель (подрядчик)', idx: a.exeSid }); }
   a.obj = a.objBase + (a.blk ? ', ' + (/^блок/i.test(a.blk) ? a.blk : 'блок ' + a.blk) : '') + (a.flr ? ', ' + (/^\d+$/.test(a.flr) ? a.flr + ' этаж' : a.flr) : '');
   a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.net = Math.round(a.net * 100) / 100;
   a.taxOn = $('tax').checked; a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
@@ -630,7 +629,7 @@ function toDrive(a, docxBlob, pdfBlob, printAt) {
   var key = a.file + '|' + a.total + '|' + (printAt || '') + '|' + signOn() + '|' + (a.extra ? a.extra.map(function (x) { return x.name; }).join(',') : ''); if (SENT[key]) return Promise.resolve(SENT[key]);
   $('drv').textContent = 'Сохраняю в Google Диск…';
   return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
-    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', adminKey: signOn() ? admKey() : '', signReq: signOn() ? { key: a.file, date: a.date, num: a.num, obj: a.obj, blk: a.blk, flr: a.flr, exe: a.exe, total: fmt(a.total), html: sheetHtml(a, true), signers: a.signers } : null, files: [
+    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', adminKey: signOn() ? admKey() : '', signReq: signOn() ? { key: a.file, date: a.date, num: a.num, obj: a.obj, blk: a.blk, flr: a.flr, exe: a.exe, total: fmt(a.total), html: sheetHtml(a, true), signers: a.signers.concat(a.viewers || []) } : null, files: [
       { name: a.file + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: d[0] },
       { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }],
       log: { key: a.file, date: a.date, num: a.num, exe: a.exe, obj: a.objBase, blk: a.blk, flr: a.flr, total: a.total, rows: a.rows, sig: { approve: a.approve, accept: a.accept } } }) });
@@ -712,10 +711,11 @@ $('sendSign').addEventListener('click', function () {
   var a = collect(); if (!a) return;
   var box = $('sendBox'); box.style.display = 'block'; box.innerHTML = '<div class="muted">Загружаю список…<\/div>';
   api({ sign_api: 'users' }).then(function (j) {
-    var inAct = {}; a.signers.forEach(function (x) { inAct[nk(x.name)] = 1; });
+    var inAct = {}; a.signers.concat(a.viewers).forEach(function (x) { inAct[nk(x.name)] = 1; });
     var others = j.users.filter(function (u) { return !inAct[nk(u.name)]; });
     var h = '<p class="step" style="margin:0 0 6px">Кому отправить АВР №' + esc(a.num) + '<\/p><div class="muted">Из акта (получают всегда):<\/div>' +
       a.signers.map(function (x) { return '<div>✔ ' + esc(x.role) + ': <b>' + esc(x.name) + '<\/b><\/div>'; }).join('') +
+      (a.viewers.length ? '<div class="muted" style="margin-top:6px">Только просмотр (без подписи):<\/div>' + a.viewers.map(function (x) { return '<div>👁 ' + esc(x.role) + ': <b>' + esc(x.name) + '<\/b><\/div>'; }).join('') : '') +
       '<div class="muted" style="margin-top:8px">Все, кто вошёл в приложение по своему коду:<\/div>' +
       (others.length ? others.map(function (u, i) { return '<label style="display:block;padding:3px 0"><input type="checkbox" class="sx" data-i="' + i + '" checked> ' + esc(u.name) + ' <small>' + esc(u.role) + '<\/small><\/label>'; }).join('') : '<div class="muted">— других пока нет —<\/div>') +
       '<div class="row2" style="margin-top:10px"><button type="button" id="sxGo" class="pri">📲 Отправить<\/button><button type="button" id="sxNo">Отмена<\/button><\/div>';
