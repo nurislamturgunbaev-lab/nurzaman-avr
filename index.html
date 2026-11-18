@@ -154,6 +154,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   <button class="pri" id="print" type="button">Печать</button>
   <button id="word" type="button" style="grid-column:1/-1">Только Word (для правки)</button>
   <button class="share" id="share" type="button">Отправить в WhatsApp / Telegram</button>
+  <div style="grid-column:1/-1;display:flex;gap:8px;align-items:stretch"><select id="rp" style="font:inherit;font-size:16px;border-radius:8px;padding:0 10px;border:1px solid #b9c4bb"><option value="office">Офис</option><option value="shtab">Штаб</option></select><button id="rprint" type="button" style="flex:1">🖨 Отправить на принтер</button></div>
 </div>
 <div class="err" id="err"></div>
 <div class="ok" id="ok"></div>
@@ -601,12 +602,12 @@ window.addEventListener('resize', preview);
 /* ---------- кнопки ---------- */
 function b64(blob) { return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok(String(r.result).split(',')[1]); }; r.onerror = no; r.readAsDataURL(blob); }); }
 var SENT = {};
-function toDrive(a, docxBlob, pdfBlob) {
+function toDrive(a, docxBlob, pdfBlob, printAt) {
   if (!UPLOAD_URL) return Promise.resolve(null);
-  var key = a.file + '|' + a.total; if (SENT[key]) return Promise.resolve(SENT[key]);
+  var key = a.file + '|' + a.total + '|' + (printAt || ''); if (SENT[key]) return Promise.resolve(SENT[key]);
   $('drv').textContent = 'Сохраняю в Google Диск…';
   return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
-    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, files: [
+    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', files: [
       { name: a.file + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: d[0] },
       { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }],
       log: { key: a.file, date: a.date, num: a.num, exe: a.exe, obj: a.objBase, blk: a.blk, flr: a.flr, total: a.total, rows: a.rows, sig: { approve: a.approve, accept: a.accept } } }) });
@@ -614,10 +615,17 @@ function toDrive(a, docxBlob, pdfBlob) {
     if (!j || !j.ok) throw new Error(j && j.error || 'нет ответа');
     SENT[key] = j;
     loadLog(showPrev);
-    $('drv').innerHTML = 'Сохранено в Google Диск, папка <b>' + esc(j.folder) + '<\/b>' + (j.folderUrl ? ' — <a href="' + esc(j.folderUrl) + '" target="_blank" rel="noopener">открыть<\/a>' : '');
+    $('drv').innerHTML = 'Сохранено в Google Диск, папка <b>' + esc(j.folder) + '<\/b>' + (j.folderUrl ? ' — <a href="' + esc(j.folderUrl) + '" target="_blank" rel="noopener">открыть<\/a>' : '') + (j.queued ? '<br><b>Отправлено на принтер: ' + esc(j.queued) + '<\/b> (напечатается, если тот компьютер включён)' : '');
     return j;
   }).catch(function (e) { $('drv').textContent = 'В Google Диск не сохранилось (' + (e && e.message || e) + '). Файлы на устройстве есть.'; });
 }
+try { if (localStorage.getItem('avr_rp')) $('rp').value = localStorage.getItem('avr_rp'); } catch (e) {}
+$('rp').addEventListener('change', function () { try { localStorage.setItem('avr_rp', this.value); } catch (e) {} });
+$('rprint').addEventListener('click', function () {
+  var a = collect(); if (!a) return; var b = this; busy(b, true, 'Отправляю на принтер…');
+  Promise.all([makeDocx(a), makePdf(a)]).then(function (bl) { return toDrive(a, bl[0], bl[1], $('rp').value); })
+    .catch(function (e) { $('err').textContent = 'Не получилось: ' + e; }).then(function () { busy(b, false, '🖨 Отправить на принтер'); });
+});
 $('print').addEventListener('click', function () {
   var a = collect(); if (!a) return;
   $('sheet').innerHTML = sheetHtml(a);
