@@ -159,6 +159,8 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   <div style="grid-column:1/-1;display:flex;gap:8px;align-items:stretch"><select id="rp" style="font:inherit;font-size:16px;border-radius:8px;padding:0 10px;border:1px solid #b9c4bb"><option value="office">Офис</option><option value="shtab">Штаб</option></select><button id="rprint" type="button" style="flex:1">🖨 Отправить на принтер</button></div>
 </div>
 <label class="tax" style="margin-top:10px"><input type="checkbox" id="toSign"> 📲 Отправлять на подпись в телефон (руководитель проекта, ПТО, прораб, мастер, подрядчик) — при сохранении, печати или отправке на принтер</label>
+<button type="button" id="sendSign" class="pri" style="width:100%;margin-top:8px;padding:14px;font-weight:bold;font-size:16px">📲 Отправить на подпись в приложение</button>
+<div id="sendBox" class="card adm" style="display:none;margin-top:8px"></div>
 <div class="err" id="err"></div>
 <div class="ok" id="ok"></div>
 <div class="muted" id="drv" style="margin-top:4px"></div>
@@ -530,7 +532,7 @@ function sheetHtml(a, marks) {
     '<p style="margin-top:22px">Всего выполнено работ на сумму: ' + esc(words(a.total)) + '<\/p>' +
     '<div class="grp">Работы приняли:<\/div>' + acc +
     '<div class="grp">Работы сдал:<\/div>' +
-    '<div class="sg2"><span>Исполнитель<\/span><span class="ln2">' + mk(a.exeSid) + '<\/span><span class="nm">' + esc(a.exe) + (a.giver ? ', ' + esc(a.giver) : '') + '<\/span><\/div>';
+    '<div class="sg2"><span>Исполнитель<\/span><span class="ln2">' + mk(a.exeSid) + '<\/span><span class="nm">' + esc(a.exe) + (a.giver ? ', ' + esc(a.giver) : '') + '<\/span><\/div>' + extraHtml(a, marks);
 }
 function makePdf(a) {
   var el = $('sheet'); el.innerHTML = sheetHtml(a);
@@ -620,7 +622,7 @@ function b64(blob) { return new Promise(function (ok, no) { var r = new FileRead
 var SENT = {};
 function toDrive(a, docxBlob, pdfBlob, printAt) {
   if (!UPLOAD_URL) return Promise.resolve(null);
-  var key = a.file + '|' + a.total + '|' + (printAt || '') + '|' + signOn(); if (SENT[key]) return Promise.resolve(SENT[key]);
+  var key = a.file + '|' + a.total + '|' + (printAt || '') + '|' + signOn() + '|' + (a.extra ? a.extra.map(function (x) { return x.name; }).join(',') : ''); if (SENT[key]) return Promise.resolve(SENT[key]);
   $('drv').textContent = 'Сохраняю в Google Диск…';
   return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
     return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', adminKey: signOn() ? admKey() : '', signReq: signOn() ? { key: a.file, date: a.date, num: a.num, obj: a.obj, blk: a.blk, flr: a.flr, exe: a.exe, total: fmt(a.total), html: sheetHtml(a, true), signers: a.signers } : null, files: [
@@ -638,7 +640,8 @@ function toDrive(a, docxBlob, pdfBlob, printAt) {
 /* ---------- подписи в телефоне (администратор) ---------- */
 var SIGN_APP = 'https://nurislamturgunbaev-lab.github.io/nurzaman-avr/sign/';
 function admKey() { try { return localStorage.getItem('avr_adm') || ''; } catch (e) { return ''; } }
-function signOn() { return $('toSign').checked && !!admKey(); }
+var FORCE_SIGN = false;
+function signOn() { return (FORCE_SIGN || $('toSign').checked) && !!admKey(); }
 try { $('toSign').checked = localStorage.getItem('avr_tosign') !== '0' && !!admKey(); } catch (e) {}
 $('toSign').addEventListener('change', function () {
   if (this.checked && !admKey()) { this.checked = false; $('admBox').open = true; $('admKey').focus(); $('err').textContent = 'Чтобы отправлять на подпись, введите пароль администратора в разделе VIII.'; return; }
@@ -691,6 +694,40 @@ $('admOut').addEventListener('click', function (e) {
     .then(function (blob) { return b64(blob); })
     .then(function (d) { return api({ sign_api: 'admin_final', adminKey: admKey(), id: b.dataset.fin, pdf: d }); })
     .then(function () { $('admGo').click(); }).catch(function (x) { b.textContent = 'Ошибка: ' + x.message; });
+});
+/* ---------- кнопка «Отправить на подпись в приложение» ---------- */
+function nk(s) { return String(s || '').replace(/[«»"'“”]/g, '').replace(/\s+/g, ' ').trim().replace(/^(ИП|ОсОО|ОАО|ООО)\s+/i, '').toLowerCase().replace(/ё/g, 'е'); }
+function extraHtml(a, marks) {
+  if (!a.extra || !a.extra.length) return '';
+  return '<div class="grp">Согласовано электронно:<\/div>' + a.extra.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2">' + (marks ? '{{S' + x.idx + '}}' : '') + '<\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
+}
+$('sendSign').addEventListener('click', function () {
+  if (!admKey()) { $('admBox').open = true; $('admKey').focus(); $('err').textContent = 'Сначала введите пароль администратора в разделе VIII.'; return; }
+  var a = collect(); if (!a) return;
+  var box = $('sendBox'); box.style.display = 'block'; box.innerHTML = '<div class="muted">Загружаю список…<\/div>';
+  api({ sign_api: 'admin_list', adminKey: admKey() }).then(function (j) {
+    var inAct = {}; a.signers.forEach(function (x) { inAct[nk(x.name)] = 1; });
+    var others = j.users.filter(function (u) { return u.last && !inAct[nk(u.name)]; });
+    var h = '<p class="step" style="margin:0 0 6px">Кому отправить АВР №' + esc(a.num) + '<\/p><div class="muted">Из акта (получают всегда):<\/div>' +
+      a.signers.map(function (x) { return '<div>✔ ' + esc(x.role) + ': <b>' + esc(x.name) + '<\/b><\/div>'; }).join('') +
+      '<div class="muted" style="margin-top:8px">Все, кто вошёл в приложение по своему коду:<\/div>' +
+      (others.length ? others.map(function (u, i) { return '<label style="display:block;padding:3px 0"><input type="checkbox" class="sx" data-i="' + i + '" checked> ' + esc(u.name) + ' <small>' + esc(u.role) + '<\/small><\/label>'; }).join('') : '<div class="muted">— других пока нет —<\/div>') +
+      '<div class="row2" style="margin-top:10px"><button type="button" id="sxGo" class="pri">📲 Отправить<\/button><button type="button" id="sxNo">Отмена<\/button><\/div>';
+    box.innerHTML = h;
+    $('sxNo').onclick = function () { box.style.display = 'none'; };
+    $('sxGo').onclick = function () {
+      var b = this, a2 = collect(); if (!a2) return;
+      b.disabled = true; b.textContent = 'Отправляю…';
+      var idx = a2.signers.length ? Math.max.apply(null, a2.signers.map(function (x) { return x.idx; })) + 1 : 0;
+      a2.extra = [];
+      [].forEach.call(box.querySelectorAll('.sx:checked'), function (c) { var u = others[+c.dataset.i], x = { name: u.name, role: u.role || 'Согласовано', idx: idx++ }; a2.extra.push(x); a2.signers.push(x); });
+      FORCE_SIGN = true;
+      Promise.all([makeDocx(a2), makePdf(a2)]).then(function (bl) { return toDrive(a2, bl[0], bl[1]); })
+        .then(function (r) { if (r && r.sign && !r.sign.error) box.style.display = 'none'; })
+        .catch(function (e) { $('err').textContent = 'Не получилось: ' + e; })
+        .then(function () { FORCE_SIGN = false; b.disabled = false; b.textContent = '📲 Отправить'; });
+    };
+  }).catch(function (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '<\/div>'; });
 });
 function pdfFromHtml(html) {
   var el = $('sheet'); el.innerHTML = html;
