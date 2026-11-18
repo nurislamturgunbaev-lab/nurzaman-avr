@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>АВР — Подписи</title>
+<meta name="theme-color" content="#1f3a5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="АВР Подписи">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef2f7;--card:#fff;--ink:#16202c;--muted:#6b7686;--line:#dde3ec;--acc:#1f3a5f;--blue:#2f6fde;--ok:#2e7d32;--no:#b3392b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 Montserrat,-apple-system,Roboto,Arial,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--acc);color:#fff;padding:calc(env(safe-area-inset-top) + 12px) 16px 12px;display:flex;align-items:center;gap:10px}
+header b{font-size:17px;flex:1}
+header button{background:transparent;border:0;color:#fff;font-size:15px;padding:6px}
+main{padding:12px 12px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;margin:0 auto}
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+input,textarea{width:100%;font:inherit;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0 12px}
+label{font-size:13px;color:var(--muted)}
+button{font:inherit;cursor:pointer}
+.btn{width:100%;padding:14px;border-radius:12px;border:0;font-weight:700;font-size:16px;background:var(--blue);color:#fff;margin-top:6px}
+.btn.gray{background:#e4e9f1;color:var(--ink)}.btn.ok{background:var(--ok)}.btn.no{background:#fff;color:var(--no);border:1.5px solid var(--no)}
+.btn:disabled{opacity:.55}
+.muted{color:var(--muted);font-size:13px}
+.err{color:var(--no);font-size:14px;margin-top:8px;min-height:1em}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;padding:9px;border-radius:20px;border:1px solid var(--line);background:#fff;font-weight:600;font-size:14px}
+.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.msg{display:flex;gap:10px;align-items:flex-start;background:#fff;border-radius:16px 16px 16px 4px;padding:12px 14px;margin:0 30px 10px 0;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:pointer}
+.msg .dot{width:10px;height:10px;border-radius:50%;background:transparent;margin-top:6px;flex:none}
+.msg.new .dot{background:var(--blue)}
+.msg.new{border-left:3px solid var(--blue)}
+.msg .b{flex:1;min-width:0}
+.msg .t{font-weight:700}
+.msg .tm{font-size:12px;color:var(--muted);white-space:nowrap}
+.msg .s{font-size:13px;margin-top:4px;font-weight:600}
+.s.ok{color:var(--ok)}.s.no{color:var(--no)}.s.w{color:var(--blue)}
+.badge{background:#fff;color:var(--acc);border-radius:10px;padding:1px 8px;font-size:13px;font-weight:700}
+.sheetBox{overflow:hidden;border-radius:10px;border:1px solid var(--line);background:#fff;margin:6px 0 12px}
+.sheetBox .a4{transform-origin:top left}
+.who div{padding:5px 0;border-bottom:1px solid var(--line);font-size:14px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;z-index:20}
+.modal .in{background:#fff;width:100%;border-radius:18px 18px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px)}
+#hidden{position:fixed;left:-10000px;top:0}
+.center{text-align:center;padding:40px 10px}
+.a4{width:794px;min-height:1123px;background:#fff;color:#000;padding:56px 60px;font:13px/1.4 Montserrat,Arial,sans-serif;box-sizing:border-box}
+.a4 .ap{margin-left:auto;width:max-content;max-width:62%}
+.a4 .ap .h{font-weight:700;margin-bottom:12px}
+.a4 .pl{display:grid;grid-template-columns:118px 96px auto;column-gap:8px;align-items:end;margin:0 0 12px}
+.a4 .pl .nm,.a4 .sg2 .nm{white-space:nowrap}
+.a4 .sg2 .nm{text-align:right}
+.a4 .pl .ln2{border-bottom:1px solid #000;margin-bottom:4px}
+.a4 .c{text-align:center}.a4 .r{text-align:right}
+.a4 table{width:100%;border-collapse:collapse;margin-top:16px}
+.a4 th,.a4 td{border:1px solid #000;padding:6px;font-size:12.5px}
+.a4 th{font-weight:700;text-align:center}
+.a4 td{text-align:center}.a4 td.l{text-align:left}.a4 td.n{text-align:right}
+.a4 .grp{font-style:italic;margin:26px 0 10px}
+.a4 .sg2{display:grid;grid-template-columns:180px 140px 1fr;column-gap:12px;align-items:end;margin:0 0 14px;font-weight:700}
+.a4 .sg2 .ln2{border-bottom:1px solid #000;margin-bottom:4px}
+.a4 .es{display:block;color:#1a4fa0;font-size:9px;font-weight:600;line-height:1.15;text-align:center;border:1px solid #1a4fa0;border-radius:3px;padding:1px 2px;margin-bottom:2px;white-space:nowrap}.a4 .es.rj{color:#a33b2b;border-color:#a33b2b}
+</style>
+</head>
+<body>
+<header><b id="hd">АВР — Подписи</b><span id="bd"></span><button id="out" type="button" style="display:none">Выйти</button></header>
+<main id="app"><div class="center muted">Загрузка…</div></main>
+<div class="modal" id="mdl"><div class="in" id="mdlIn"></div></div>
+<div id="hidden" class="a4"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+var API = 'https://script.google.com/macros/s/AKfycbxFp_OBRiSddYr_LuvVpFf4MkXF4YE1vnkpNKBNdEw4RH4u40My3YzzFAHMRdcI3KR3/exec';
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+function api(body) {
+  return fetch(API, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.ok) { var e = new Error(j.error || 'ошибка'); if (/войдите заново/.test(j.error)) { ls('sg_token', null); } throw e; }
+    return j;
+  });
+}
+var ME = null, ITEMS = [], TAB = 'wait', UNLOCKED = false, HIDDEN_AT = 0;
+try { ME = JSON.parse(ls('sg_me') || 'null'); } catch (e) {}
+
+/* ---------- только телефон ---------- */
+var MOBILE = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+if (!MOBILE) {
+  $('app').innerHTML = '<div class="card center"><h3>Приложение только для телефона</h3><p class="muted">Откройте эту ссылку на телефоне:<br><b>' + esc(location.href.split('?')[0]) + '</b></p></div>';
+} else start();
+
+function start() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+  if (!ls('sg_token') || !ME) return showLogin();
+  showLock();
+}
+
+/* ---------- вход по личному коду ---------- */
+function showLogin(msg) {
+  UNLOCKED = false; $('out').style.display = 'none'; $('bd').innerHTML = ''; $('hd').textContent = 'АВР — Подписи';
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  $('app').innerHTML = '<div class="card"><h3 style="margin:0 0 10px">Вход в кабинет</h3>' +
+    '<label>ФИО (как в акте)</label><input id="lName" autocomplete="name" value="' + esc(ME ? ME.name : '') + '">' +
+    '<label>Личный код</label><input id="lCode" inputmode="numeric" autocomplete="one-time-code" maxlength="10">' +
+    '<button class="btn" id="lGo" type="button">Войти</button><div class="err" id="lErr">' + esc(msg || '') + '</div>' +
+    '<p class="muted">Личный код выдаёт ответственный за АВР. Никому его не сообщайте.</p></div>' +
+    (standalone ? '' : '<div class="card muted"><b>Установите на телефон:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение» / «Добавить на главный экран».</div>');
+  $('lGo').onclick = function () {
+    var b = this; b.disabled = true; $('lErr').textContent = '';
+    api({ sign_api: 'login', name: $('lName').value, code: $('lCode').value, device: navigator.userAgent.slice(0, 120) }).then(function (j) {
+      ls('sg_token', j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true;
+      offerBio();
+    }).catch(function (e) { $('lErr').textContent = e.message; b.disabled = false; });
+  };
+}
+
+/* ---------- Face ID / отпечаток (WebAuthn, проверка на телефоне) ---------- */
+function bioAvailable() {
+  return window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable ? PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(function () { return false; }) : Promise.resolve(false);
+}
+function rndBytes(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return a; }
+function b64u(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+function unb64(s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
+function offerBio() {
+  bioAvailable().then(function (ok) {
+    if (!ok || ls('sg_bio')) return showInbox();
+    $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔐</div><h3>Входить по Face ID или отпечатку?</h3><p class="muted">Код больше вводить не придётся — только лицо или палец.</p>' +
+      '<button class="btn" id="bOn" type="button">Включить</button><button class="btn gray" id="bNo" type="button">Не сейчас</button><div class="err" id="bErr"></div></div>';
+    $('bNo').onclick = showInbox;
+    $('bOn').onclick = function () {
+      navigator.credentials.create({ publicKey: {
+        challenge: rndBytes(32), rp: { name: 'АВР Подписи' },
+        user: { id: rndBytes(16), name: ME.name, displayName: ME.name },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'discouraged' },
+        timeout: 60000, attestation: 'none' } })
+        .then(function (c) { ls('sg_bio', b64u(c.rawId)); showInbox(); })
+        .catch(function (e) { $('bErr').textContent = 'Не получилось: ' + e.message; });
+    };
+  });
+}
+function bioCheck() {
+  return navigator.credentials.get({ publicKey: { challenge: rndBytes(32), allowCredentials: [{ type: 'public-key', id: unb64(ls('sg_bio')), transports: ['internal'] }], userVerification: 'required', timeout: 60000 } });
+}
+function showLock() {
+  UNLOCKED = false; $('out').style.display = 'none';
+  var bio = !!ls('sg_bio');
+  $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔒</div><h3>' + esc(ME.name) + '</h3>' +
+    (bio ? '<button class="btn" id="kBio" type="button">Войти по Face ID / отпечатку</button>' : '') +
+    '<label style="display:block;text-align:left;margin-top:14px">Личный код</label><input id="kCode" inputmode="numeric" maxlength="10">' +
+    '<button class="btn ' + (bio ? 'gray' : '') + '" id="kGo" type="button">Войти по коду</button><div class="err" id="kErr"></div>' +
+    '<p><a href="#" id="kOther" class="muted">Войти другим человеком</a></p></div>';
+  if (bio) $('kBio').onclick = function () { bioCheck().then(function () { UNLOCKED = true; showInbox(); }).catch(function (e) { $('kErr').textContent = 'Не распознано. Попробуйте ещё раз или войдите по коду.'; }); };
+  $('kGo').onclick = function () {
+    var b = this; b.disabled = true;
+    api({ sign_api: 'login', name: ME.name, code: $('kCode').value, device: navigator.userAgent.slice(0, 120) }).then(function (j) {
+      ls('sg_token', j.token); ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; offerBio();
+    }).catch(function (e) { $('kErr').textContent = e.message; b.disabled = false; });
+  };
+  $('kOther').onclick = function (e) { e.preventDefault(); logout(); };
+}
+function logout() { ls('sg_token', null); ls('sg_bio', null); ls('sg_me', null); ME = null; showLogin(); }
+$('out').onclick = function () { if (confirmBox('Выйти из кабинета на этом телефоне?')) logout(); };
+function confirmBox(t) { return window.confirm(t); }
+document.addEventListener('visibilitychange', function () {
+  if (document.hidden) { HIDDEN_AT = Date.now(); return; }
+  if (UNLOCKED && HIDDEN_AT && Date.now() - HIDDEN_AT > 5 * 60 * 1000) showLock();
+  else if (UNLOCKED) load(true);
+});
+
+/* ---------- лента сообщений ---------- */
+var POLL = null;
+function pending(list) { return list.filter(function (r) { return r.status === 'Ожидает' && r.mine && r.mine.st === ''; }); }
+function showInbox() {
+  UNLOCKED = true; $('out').style.display = ''; $('hd').textContent = ME.name;
+  $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
+    ('Notification' in window && Notification.permission === 'default' ? '<button class="btn gray" id="nOn" type="button">🔔 Включить уведомления</button>' : '');
+  if ($('nOn')) $('nOn').onclick = function () { Notification.requestPermission().then(function () { $('nOn').remove(); }); };
+  [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.onclick = function () { TAB = b.dataset.t; drawList(); }; });
+  load();
+  clearInterval(POLL); POLL = setInterval(function () { if (UNLOCKED && !document.hidden) load(true); }, 30000);
+}
+function load(quiet) {
+  var before = pending(ITEMS).map(function (r) { return r.id; });
+  return api({ sign_api: 'inbox', token: ls('sg_token') }).then(function (j) {
+    ITEMS = j.items;
+    var p = pending(ITEMS);
+    $('bd').innerHTML = p.length ? '<span class="badge">' + p.length + '</span>' : '';
+    if (navigator.setAppBadge) { if (p.length) navigator.setAppBadge(p.length).catch(function () {}); else navigator.clearAppBadge().catch(function () {}); }
+    var fresh = p.filter(function (r) { return before.indexOf(r.id) < 0; });
+    if (quiet && fresh.length) notify(fresh[0]);
+    if ($('list')) drawList();
+  }).catch(function (e) {
+    if (/войдите заново/.test(e.message)) return showLogin('Войдите заново.');
+    if (!quiet && $('list')) $('list').innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
+  });
+}
+function notify(r) {
+  try { navigator.vibrate && navigator.vibrate([150, 80, 150]); } catch (e) {}
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  var t = 'АВР №' + r.num + ' — нужна ваша подпись', o = { body: [r.exe, r.obj].filter(Boolean).join(' · '), icon: 'icon-192.png', tag: r.id };
+  navigator.serviceWorker && navigator.serviceWorker.ready ? navigator.serviceWorker.ready.then(function (s) { s.showNotification(t, o); }) : new Notification(t, o);
+}
+function stLine(r) {
+  if (r.status === 'Отклонён') return '<div class="s no">✖ Отклонён' + (r.mine && r.mine.st === 'Отклонён' ? ' вами' : '') + '</div>';
+  if (r.status === 'Подписан') return '<div class="s ok">✔ Подписан всеми' + (r.pdf ? ' · PDF готов' : '') + '</div>';
+  if (r.mine && r.mine.st === 'Подписан') return '<div class="s ok">✔ Вы подписали · ждём остальных (' + r.done + '/' + r.all + ')</div>';
+  return '<div class="s w">● Ждёт вашей подписи (' + r.done + '/' + r.all + ')</div>';
+}
+function drawList() {
+  [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === TAB); });
+  var L = TAB === 'wait' ? pending(ITEMS) : ITEMS;
+  if (!L.length) { $('list').innerHTML = '<div class="center muted">' + (TAB === 'wait' ? 'Новых актов на подпись нет 👍' : 'Пока нет актов') + '</div>'; return; }
+  $('list').innerHTML = L.map(function (r) {
+    var isNew = r.status === 'Ожидает' && r.mine && r.mine.st === '';
+    return '<div class="msg' + (isNew ? ' new' : '') + '" data-id="' + esc(r.id) + '"><span class="dot"></span><div class="b">' +
+      '<div style="display:flex;gap:8px"><span class="t" style="flex:1">АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</span><span class="tm">' + esc(r.created) + '</span></div>' +
+      '<div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + '</div>' +
+      '<div class="muted">Сумма: <b style="color:var(--ink)">' + esc(r.total) + '</b></div>' + stLine(r) + '</div></div>';
+  }).join('');
+  [].forEach.call(document.querySelectorAll('.msg'), function (m) { m.onclick = function () { openAct(m.dataset.id); }; });
+}
+
+/* ---------- просмотр и подпись ---------- */
+function fit(box) {
+  var a = box.querySelector('.a4'); if (!a) return;
+  var k = box.clientWidth / 794; a.style.transform = 'scale(' + k + ')'; box.style.height = (a.offsetHeight * k) + 'px';
+}
+function openAct(id) {
+  $('app').innerHTML = '<button class="btn gray" id="back" type="button" style="margin:0 0 10px">← К сообщениям</button><div id="act"><div class="center muted">Открываю акт…</div></div>';
+  $('back').onclick = showInbox;
+  api({ sign_api: 'act', token: ls('sg_token'), id: id }).then(function (j) { drawAct(j.act, j.html); })
+    .catch(function (e) { $('act').innerHTML = '<div class="card err">' + esc(e.message) + '</div>'; });
+}
+function drawAct(r, html) {
+  var mineWait = r.status === 'Ожидает' && r.mine && r.mine.st === '';
+  $('act').innerHTML = '<div class="card"><b>АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</b><div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + ' · сумма ' + esc(r.total) + '</div>' + stLine(r) +
+    (r.pdf ? '<a class="btn gray" style="display:block;text-align:center;text-decoration:none" href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 Открыть подписанный PDF</a>' : '') + '</div>' +
+    '<div class="sheetBox" id="sb"><div class="a4">' + html + '</div></div>' +
+    '<div class="card who"><b>Подписи</b>' + r.signers.map(function (p) {
+      return '<div>' + (p.st === 'Подписан' ? '✔' : p.st === 'Отклонён' ? '✖' : '⏳') + ' ' + esc(p.role) + ': <b>' + esc(p.name) + '</b>' + (p.at ? ' <span class="muted">' + esc(p.at) + '</span>' : '') + (p.cm ? '<br><i class="muted">Причина: ' + esc(p.cm) + '</i>' : '') + '</div>';
+    }).join('') + '</div>' +
+    (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : '');
+  var sb = $('sb'); fit(sb); setTimeout(function () { fit(sb); }, 300); window.onresize = function () { fit(sb); };
+  if (!mineWait) return;
+  $('doSign').onclick = function () {
+    var b = this;
+    sheet('<h3 style="margin:0 0 8px">Подписать АВР №' + esc(r.num) + '?</h3><p class="muted">Вы подтверждаете, что работы выполнены, объёмы и сумма ' + esc(r.total) + ' верны.</p><button class="btn ok" id="mYes" type="button">✔ Подписываю</button><button class="btn gray" id="mNo" type="button">Отмена</button>');
+    $('mNo').onclick = closeSheet;
+    $('mYes').onclick = function () {
+      closeSheet(); b.disabled = true; b.textContent = 'Подписываю…';
+      var gate = ls('sg_bio') ? bioCheck() : Promise.resolve();
+      gate.then(function () { return api({ sign_api: 'sign', token: ls('sg_token'), id: r.id }); }).then(function (j) {
+        if (j.allSigned) { b.textContent = 'Все подписали — сохраняю PDF…'; return makeFinal(r.id, j.html).then(function () { openAct(r.id); load(true); }); }
+        openAct(r.id); load(true);
+      }).catch(function (e) { $('aErr').textContent = e.name === 'NotAllowedError' ? 'Face ID / отпечаток не подтверждён' : e.message; b.disabled = false; b.textContent = '✔ Подписываю'; });
+    };
+  };
+  $('doRej').onclick = function () {
+    sheet('<h3 style="margin:0 0 8px">Отклонить АВР №' + esc(r.num) + '</h3><label>Причина (что исправить)</label><textarea id="mCm" rows="3"></textarea><button class="btn no" id="mYes" type="button">✖ Отклонить</button><button class="btn gray" id="mNo" type="button">Отмена</button><div class="err" id="mErr"></div>');
+    $('mNo').onclick = closeSheet;
+    $('mYes').onclick = function () {
+      var cm = $('mCm').value.trim(); if (!cm) { $('mErr').textContent = 'Напишите причину'; return; }
+      this.disabled = true;
+      api({ sign_api: 'reject', token: ls('sg_token'), id: r.id, comment: cm }).then(function () { closeSheet(); openAct(r.id); load(true); })
+        .catch(function (e) { $('mErr').textContent = e.message; });
+    };
+  };
+}
+function sheet(h) { $('mdlIn').innerHTML = h; $('mdl').style.display = 'flex'; }
+function closeSheet() { $('mdl').style.display = 'none'; }
+$('mdl').onclick = function (e) { if (e.target === this) closeSheet(); };
+function makeFinal(id, html) {
+  var el = $('hidden'); el.innerHTML = html;
+  return html2canvas(el, { scale: 2, backgroundColor: '#ffffff' }).then(function (cv) {
+    var pdf = new jspdf.jsPDF({ unit: 'pt', format: 'a4' });
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    var k = Math.min(pw / cv.width, ph / cv.height);
+    pdf.addImage(cv.toDataURL('image/jpeg', 0.9), 'JPEG', (pw - cv.width * k) / 2, 0, cv.width * k, cv.height * k);
+    var data = pdf.output('datauristring').split(',')[1];
+    el.innerHTML = '';
+    return api({ sign_api: 'final', token: ls('sg_token'), id: id, pdf: data });
+  }).catch(function () { /* PDF можно сформировать позже на сайте (раздел VIII) */ });
+}
+</script>
+</body>
+</html>
