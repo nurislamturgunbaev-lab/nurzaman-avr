@@ -78,7 +78,8 @@ button{font:inherit;cursor:pointer}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 var VAPID_PUB = 'BE2oHIVgxqCbzGb1XQMZjBWByXWigMvKHyElsqIwOJTCrVjynSghusXSB6mTUpNQ71AOdq2H17MshOHFDb1yNuU';
-var API = 'https://script.google.com/macros/s/AKfycbxFp_OBRiSddYr_LuvVpFf4MkXF4YE1vnkpNKBNdEw4RH4u40My3YzzFAHMRdcI3KR3/exec';
+var API = 'https://avr-sign.nurislamturgunbaev.workers.dev/';
+var AVR_SITE = '../';
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
@@ -199,7 +200,7 @@ var POLL = null;
 function pending(list) { return list.filter(function (r) { return r.status === 'Ожидает' && r.mine && r.mine.st === ''; }); }
 function showInbox() {
   UNLOCKED = true; $('out').style.display = ''; $('hd').textContent = ME.name; $('staffBtn').style.display = ME.admin ? '' : 'none';
-  $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="done">Подписано</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
+  $('app').innerHTML = '<div class="tabs"><button type="button" data-t="wait">Ждут подписи</button><button type="button" data-t="done">Подписано</button><button type="button" data-t="rej">Замечания</button><button type="button" data-t="all">Все акты</button></div><div id="list"><div class="center muted">Загрузка…</div></div>' +
     (!MOBILE ? '' : !('PushManager' in window) ? '<div class="card muted">Чтобы приходили уведомления на iPhone: Safari → «Поделиться» → «На экран „Домой“», затем откройте приложение со значка.</div>'
       : Notification.permission !== 'granted' ? '<button class="btn gray" id="nOn" type="button">🔔 Включить уведомления</button>' : '');
   if ($('nOn')) $('nOn').onclick = function () { var b = this; ensurePush(true).then(function (ok) { if (ok) b.remove(); else b.textContent = 'Уведомления запрещены — разрешите их в настройках телефона'; }); };
@@ -251,15 +252,17 @@ function signedAt(r) {
 function recentDone(list) { var now = Date.now(); return list.filter(function (r) { var t = signedAt(r); return t && now - t < 24 * 3600 * 1000; }); }
 function drawList() {
   [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === TAB); });
-  var P = pending(ITEMS), D = recentDone(ITEMS);
-  var L = TAB === 'wait' ? P : TAB === 'done' ? D : ITEMS.filter(function (r) { return P.indexOf(r) < 0 && D.indexOf(r) < 0; });
-  if (!L.length) { $('list').innerHTML = '<div class="center muted">' + (TAB === 'wait' ? 'Новых актов на подпись нет 👍' : TAB === 'done' ? 'За последние 24 часа подписанных нет' : 'Пока нет актов') + '</div>'; return; }
+  var P = pending(ITEMS), D = recentDone(ITEMS), J = ITEMS.filter(function (r) { return r.status === 'Отклонён'; });
+  [].forEach.call(document.querySelectorAll('.tabs button'), function (b) { var n = { wait: P.length, rej: J.length }[b.dataset.t]; b.innerHTML = b.textContent.replace(/\s*\(\d+\)$/, '') + (n ? ' (' + n + ')' : ''); });
+  var L = TAB === 'wait' ? P : TAB === 'done' ? D : TAB === 'rej' ? J : ITEMS;
+  if (!L.length) { $('list').innerHTML = '<div class="center muted">' + (TAB === 'wait' ? 'Новых актов на подпись нет 👍' : TAB === 'done' ? 'За последние 24 часа подписанных нет' : TAB === 'rej' ? 'Замечаний нет 👍' : 'Пока нет актов (храним 30 дней)') + '</div>'; return; }
   $('list').innerHTML = L.map(function (r) {
     var isNew = r.status === 'Ожидает' && r.mine && r.mine.st === '';
     return '<div class="msg' + (isNew ? ' new' : '') + '" data-id="' + esc(r.id) + '"><span class="dot"></span><div class="b">' +
       '<div style="display:flex;gap:8px"><span class="t" style="flex:1">АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</span><span class="tm">' + esc(r.created) + '</span></div>' +
       '<div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + '</div>' +
-      '<div class="muted">Сумма: <b style="color:var(--ink)">' + esc(r.total) + '</b></div>' + stLine(r) + '</div></div>';
+      '<div class="muted">Сумма: <b style="color:var(--ink)">' + esc(r.total) + '</b></div>' + stLine(r) +
+      (r.status === 'Отклонён' ? r.signers.filter(function (p) { return p.cm; }).map(function (p) { return '<div class="s no" style="font-weight:400">💬 ' + esc(p.name) + ': ' + esc(p.cm) + '</div>'; }).join('') : '') + '</div></div>';
   }).join('');
   [].forEach.call(document.querySelectorAll('.msg'), function (m) { m.onclick = function () { openAct(m.dataset.id); }; });
 }
@@ -269,7 +272,7 @@ function fit(box) {
   var a = box.querySelector('.a4'); if (!a) return;
   var k = box.clientWidth / 794; a.style.transform = 'scale(' + k + ')'; box.style.height = (a.offsetHeight * k) + 'px';
 }
-var CUR_ACT = null;
+var CUR_ACT = null, MKF = {};
 function dropAct(id) { try { localStorage.removeItem('sg_act_' + id); } catch (e) {} }
 function openAct(id) {
   CUR_ACT = id;
@@ -289,9 +292,11 @@ function drawAct(r, html) {
   var myTurn = r.status === 'Ожидает' && r.mine && r.mine.st === '';
   var mineWait = myTurn && MOBILE;
   $('act').innerHTML = '<div class="card"><b>АВР №' + esc(r.num) + ' от ' + esc(r.date) + '</b><div>' + esc(r.exe) + '</div><div class="muted">' + esc([r.obj, r.blk && 'блок ' + r.blk, r.flr && r.flr + ' этаж'].filter(Boolean).join(', ')) + ' · сумма ' + esc(r.total) + '</div>' + stLine(r) +
-    (r.pdf ? '<a class="btn gray" style="display:block;text-align:center;text-decoration:none" href="' + esc(r.pdf) + '" target="_blank" rel="noopener">📄 Открыть подписанный PDF</a>' : '') + '</div>' +
+    (r.pdf ? '<button class="btn gray" id="getPdf" type="button">📄 Открыть подписанный PDF</button>' : '') +
+    (r.status === 'Отклонён' && ME.admin ? '<a class="btn" style="display:block;text-align:center;text-decoration:none" href="' + AVR_SITE + '?fix=' + encodeURIComponent(r.id) + '" target="_blank" rel="noopener">✏ Исправить в АВР и отправить заново</a>' : '') + '</div>' +
     '<div class="sheetBox" id="sb"><div class="a4">' + html + '</div></div>' +
-    r.signers.filter(function (p) { return p.cm; }).map(function (p) { return '<div class="card err">✖ Отклонил ' + esc(p.name) + ': ' + esc(p.cm) + '</div>'; }).join('') +
+    r.signers.filter(function (p) { return p.cm; }).map(function (p) { return '<div class="card err">✖ Отклонил ' + esc(p.name) + ' (' + esc(p.at) + '): ' + esc(p.cm) + '</div>'; }).join('') +
+    ((r.hist || []).length ? '<div class="card muted"><b>Прошлые замечания (исправлено):</b>' + r.hist.map(function (p) { return '<div>• ' + esc(p.name) + ', ' + esc(p.at) + ': ' + esc(p.cm) + '</div>'; }).join('') + '</div>' : '') +
     (mineWait ? '<button class="btn ok" id="doSign" type="button">✔ Подписываю</button><button class="btn no" id="doRej" type="button">✖ Отклонить</button><div class="err" id="aErr"></div>' : '') +
     (ME.admin ? '<div style="display:flex;gap:8px"><button class="btn gray" type="button" data-pp="office">🖨 Печать — Офис</button><button class="btn gray" type="button" data-pp="shtab">🖨 Печать — Штаб</button></div><div class="muted" id="ppMsg" style="margin-top:6px"></div>' : '') +
     (ME.admin && r.status === 'Подписан' && !r.pdf ? '<button class="btn gray" id="mkPdf" type="button">Сформировать подписанный PDF</button>' : '');
@@ -303,6 +308,14 @@ function drawAct(r, html) {
       .catch(function (e) { $('ppMsg').textContent = 'Не получилось: ' + e.message; })
       .then(function () { b.disabled = false; b.textContent = t; });
   }; });
+  if ($('getPdf')) $('getPdf').onclick = function () {
+    var b = this, w = window.open('', '_blank'); b.disabled = true; b.textContent = 'Открываю…';
+    api({ sign_api: 'pdf', token: ls('sg_token'), id: r.id }).then(function (j) {
+      var url = URL.createObjectURL(new Blob([unb64(j.pdf)], { type: 'application/pdf' }));
+      if (w) w.location = url; else { var a = document.createElement('a'); a.href = url; a.download = j.name; a.click(); }
+    }).catch(function (e) { if (w) w.close(); alert(e.message); }).then(function () { b.disabled = false; b.textContent = '📄 Открыть подписанный PDF'; });
+  };
+  if (r.status === 'Подписан' && !r.pdf && !MKF[r.id]) { MKF[r.id] = 1; makeFinal(r.id, html); }
   if ($('mkPdf')) $('mkPdf').onclick = function () { this.disabled = true; this.textContent = 'Формирую…'; makeFinal(r.id, html).then(function () { openAct(r.id); }); };
   if (!mineWait) return;
   if (!MOBILE) $('doSign').textContent = '✔ Подписать (подтвердить на телефоне)';
