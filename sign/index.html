@@ -149,7 +149,7 @@ function b64u(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(
 function unb64(s) { return Uint8Array.from(atob(s), function (c) { return c.charCodeAt(0); }); }
 function offerBio() {
   bioAvailable().then(function (ok) {
-    if (!ok || ls('sg_bio')) return showInbox();
+    if (!MOBILE || !ok || ls('sg_bio')) return showInbox();
     $('app').innerHTML = '<div class="card center"><div style="font-size:44px">🔐</div><h3>Входить через ' + BIO + '?</h3><p class="muted">Код больше вводить не придётся.</p>' +
       '<button class="btn" id="bOn" type="button">Включить</button><button class="btn gray" id="bNo" type="button">Не сейчас</button><div class="err" id="bErr"></div></div>';
     $('bNo').onclick = showInbox;
@@ -364,7 +364,7 @@ function showChangePw(msg) {
     if (a === '1234') { $('pErr').textContent = 'Придумайте свой пароль, не 1234'; return; }
     btn.disabled = true;
     api({ sign_api: 'set_password', token: ls('sg_token'), password: a }).then(function (j) {
-      ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; offerBio();
+      ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; showInbox();
     }).catch(function (e) { $('pErr').textContent = e.message; btn.disabled = false; });
   };
 }
