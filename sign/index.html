@@ -241,7 +241,8 @@ function notify(r) {
 }
 function stLine(r) {
   if (r.status === 'Отклонён') return '<div class="s no">✖ Отклонён' + (r.mine && r.mine.st === 'Отклонён' ? ' вами' : '') + '</div>';
-  if (r.status === 'Подписан') return '<div class="s ok">✔ Подписан всеми' + (r.pdf ? ' · PDF готов' : '') + '</div>';
+  if (r.status === 'Подписан') return '<div class="s ok">✔ Подписан всеми' + (r.pdf ? ' · PDF готов' : '') + '</div>' +
+    (!r.pdf && ME && ME.admin ? '<div class="s no" style="font-weight:400">PDF не сформирован — откройте акт и нажмите «Сформировать подписанный PDF»</div>' : '');
   if (r.mine && r.mine.st === 'Подписан') return '<div class="s ok">✔ Вы подписали · ждём остальных (' + r.done + '/' + r.all + ')</div>';
   if (!r.mine || r.mine.view) return '<div class="s">' + (r.mine ? '👁 Только просмотр · ' : '⏳ ') + 'подписано ' + r.done + '/' + r.all + '</div>';
   return '<div class="s w">● Ждёт вашей подписи (' + r.done + '/' + r.all + ')</div>';
