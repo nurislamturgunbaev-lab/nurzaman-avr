@@ -22,6 +22,10 @@ main{padding:12px 12px calc(env(safe-area-inset-bottom) + 24px);max-width:640px;
 @media (min-width:900px){main{max-width:920px;padding-top:20px}.msg{margin-right:0}.modal{align-items:center;justify-content:center}.modal .in{max-width:520px;border-radius:18px}}
 #inst{display:none;background:#fff;color:var(--acc);border-radius:8px;font-weight:700;font-size:13px;padding:6px 10px}
 .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.code{margin-top:8px;background:#eef4ff;border:1px solid #c9dcff;border-radius:10px;padding:8px 10px;font-size:15px}
+.code b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:20px;letter-spacing:2px}
+.code.big{text-align:center;padding:14px;margin-top:12px}
+.code.big b{font-size:28px;display:inline-block;margin:4px 0}
 input,textarea{width:100%;font:inherit;font-size:16px;padding:13px;border:1px solid var(--line);border-radius:10px;background:#fff;margin:6px 0 12px}
 label{font-size:13px;color:var(--muted)}
 button{font:inherit;cursor:pointer}
@@ -130,7 +134,7 @@ function showLogin(msg) {
     '<label>ФИО (как в акте)</label><input id="lName" autocomplete="name" value="' + esc(ME ? ME.name : '') + '">' +
     '<label>Пароль</label><input id="lCode" type="password" autocomplete="current-password" maxlength="40">' +
     '<button class="btn" id="lGo" type="button">Войти</button><div class="err" id="lErr">' + esc(msg || '') + '</div>' +
-    '<p class="muted">Первый вход — пароль <b>1234</b>, затем сразу придумаете свой. Никому его не сообщайте.</p></div>' +
+    '<p class="muted">Первый вход — по коду, который выдал администратор. Сразу после входа придумаете свой пароль. Никому его не сообщайте.</p></div>' +
     (standalone ? '' : '<div class="card muted"><b>Установите приложение:</b><br>iPhone — Safari → «Поделиться» → «На экран „Домой“».<br>Android — Chrome → ⋮ → «Установить приложение».<br>Компьютер — Chrome или Edge → кнопка «⬇ Установить» вверху или значок установки в адресной строке; появится значок на рабочем столе.</div>');
   $('lGo').onclick = function () {
     var b = this; b.disabled = true; $('lErr').textContent = '';
@@ -395,14 +399,15 @@ function showConfirm(c) {
 function afterLogin() { if (ME.mustChange) showChangePw(); else offerBio(); }
 function showChangePw(msg) {
   UNLOCKED = false; $('out').style.display = ''; $('staffBtn').style.display = 'none';
-  $('app').innerHTML = '<div class="card"><h3 style="margin:0 0 8px">Придумайте свой пароль</h3><p class="muted">Вы вошли со стандартным паролем. Чтобы продолжить работу, задайте личный пароль (не короче 4 знаков). Никому его не сообщайте — даже администратор его не увидит.</p>' +
+  $('app').innerHTML = '<div class="card"><h3 style="margin:0 0 8px">Придумайте свой пароль</h3><p class="muted">Вы вошли по временному коду. Чтобы продолжить работу, задайте личный пароль: <b>не короче 6 знаков, минимум одна буква и одна цифра</b>. Никому его не сообщайте — даже администратор его не увидит.</p>' +
     '<label>Новый пароль</label><input id="p1" type="password" autocomplete="new-password"><label>Повторите пароль</label><input id="p2" type="password" autocomplete="new-password">' +
     '<button class="btn" id="pGo" type="button">Сохранить и продолжить</button><div class="err" id="pErr">' + esc(msg || '') + '</div></div>';
   $('pGo').onclick = function () {
     var a = $('p1').value, b = $('p2').value, btn = this;
     if (a !== b) { $('pErr').textContent = 'Пароли не совпадают'; return; }
-    if (a.length < 4) { $('pErr').textContent = 'Не короче 4 знаков'; return; }
-    if (a === '1234') { $('pErr').textContent = 'Придумайте свой пароль, не 1234'; return; }
+    if (a.length < 6) { $('pErr').textContent = 'Не короче 6 знаков'; return; }
+    if (!/[a-zа-яё]/i.test(a)) { $('pErr').textContent = 'Добавьте хотя бы одну букву'; return; }
+    if (!/\d/.test(a)) { $('pErr').textContent = 'Добавьте хотя бы одну цифру'; return; }
     btn.disabled = true;
     api({ sign_api: 'set_password', token: ls('sg_token'), password: a }).then(function (j) {
       ME = j.me; ls('sg_me', JSON.stringify(ME)); UNLOCKED = true; showInbox();
@@ -410,30 +415,36 @@ function showChangePw(msg) {
   };
 }
 /* ---------- сотрудники (только администратор) ---------- */
+var NEWCODE = null;
 $('staffBtn').onclick = showStaff;
 function showStaff() {
   $('app').innerHTML = '<button class="btn gray" id="back" type="button" style="margin:0 0 10px">← К сообщениям</button>' +
-    '<div class="card"><h3 style="margin:0 0 8px">Сотрудники</h3><div class="muted">Новый сотрудник входит со своим ФИО и паролем <b>1234</b> и сразу меняет его на свой. Пароли никто не видит — их можно только сбросить на 1234.</div>' +
+    '<div class="card"><h3 style="margin:0 0 8px">Сотрудники</h3><div class="muted">У каждого свой временный код для первого входа. Передайте код сотруднику лично — при входе он сразу придумает свой пароль, и код перестанет работать. Пароли не видит никто, в том числе вы.</div>' +
     '<label style="display:block;margin-top:10px">ФИО</label><input id="sName"><label>Должность</label><input id="sRole" list="roles" placeholder="Руководитель проекта, Прораб, Мастер…">' +
     '<datalist id="roles"><option value="Руководитель проекта"><option value="Руководитель ПТО"><option value="Инженеры ПТО"><option value="Прораб"><option value="Мастер"><option value="Директор"><option value="Заместитель директора"></datalist>' +
-    '<button class="btn" id="sAdd" type="button">+ Добавить сотрудника</button><div class="err" id="sErr"></div></div><div id="sList"><div class="center muted">Загрузка…</div></div>';
+    '<button class="btn" id="sAdd" type="button">+ Добавить сотрудника</button><div class="err" id="sErr"></div><div id="sNew"></div></div><div id="sList"><div class="center muted">Загрузка…</div></div>';
   $('back').onclick = showInbox;
   $('sAdd').onclick = function () {
     var n = $('sName').value.trim(), r = $('sRole').value.trim(), b = this;
     if (!n) { $('sErr').textContent = 'Введите ФИО'; return; }
-    b.disabled = true;
-    api({ sign_api: 'staff_add', token: ls('sg_token'), name: n, role: r }).then(showStaff).catch(function (e) { $('sErr').textContent = e.message; b.disabled = false; });
+    if (!r) { $('sErr').textContent = 'Укажите должность'; return; }
+    b.disabled = true; $('sErr').textContent = '';
+    api({ sign_api: 'staff_add', token: ls('sg_token'), name: n, role: r }).then(function (j) {
+      NEWCODE = { name: n, code: j.code }; showStaff();
+    }).catch(function (e) { $('sErr').textContent = e.message; b.disabled = false; });
   };
+  if (NEWCODE) { $('sNew').innerHTML = '<div class="code big">Код для входа<br><b>' + esc(NEWCODE.code) + '</b><br><span class="muted">' + esc(NEWCODE.name) + ' — передайте код лично, он действует до первого входа</span></div>'; NEWCODE = null; }
   api({ sign_api: 'staff_list', token: ls('sg_token') }).then(function (j) {
     $('sList').innerHTML = j.staff.map(function (u) {
       return '<div class="card" style="padding:12px"><b>' + esc(u.name) + '</b>' + (u.admin ? ' <span class="badge" style="background:var(--acc);color:#fff">админ</span>' : '') +
-        '<div class="muted">' + esc(u.role || '—') + ' · ' + (u.last ? 'вход ' + esc(u.last) : 'ещё не входил') + (u.mustChange ? ' · пароль ещё 1234' : '') + '</div>' +
-        '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn gray" type="button" data-rs="' + esc(u.name) + '" style="margin:0">Сбросить пароль на 1234</button>' +
+        '<div class="muted">' + esc(u.role || '—') + ' · ' + (u.last ? 'вход ' + esc(u.last) : 'ещё не входил') + (u.mustChange ? ' · свой пароль ещё не задан' : ' · пароль свой') + '</div>' +
+        (u.code ? '<div class="code">Код для входа: <b>' + esc(u.code) + '</b></div>' : '') +
+        '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn gray" type="button" data-rs="' + esc(u.name) + '" style="margin:0">Новый код</button>' +
         (u.admin ? '' : '<button class="btn no" type="button" data-del="' + esc(u.name) + '" style="margin:0">Удалить</button>') + '</div></div>';
     }).join('');
     [].forEach.call(document.querySelectorAll('[data-rs]'), function (b) { b.onclick = function () {
-      if (!confirm('Сбросить пароль сотрудника «' + b.dataset.rs + '» на 1234? При входе он должен будет придумать новый.')) return;
-      api({ sign_api: 'staff_reset', token: ls('sg_token'), name: b.dataset.rs }).then(function () { b.textContent = '✔ Сброшен на 1234'; b.disabled = true; }).catch(function (e) { alert(e.message); });
+      if (!confirm('Выдать сотруднику «' + b.dataset.rs + '» новый код? Старый пароль перестанет работать, при входе он придумает новый.')) return;
+      api({ sign_api: 'staff_reset', token: ls('sg_token'), name: b.dataset.rs }).then(function (j) { NEWCODE = { name: b.dataset.rs, code: j.code }; showStaff(); }).catch(function (e) { alert(e.message); });
     }; });
     [].forEach.call(document.querySelectorAll('[data-del]'), function (b) { b.onclick = function () {
       if (!confirm('Удалить сотрудника «' + b.dataset.del + '»? Он больше не сможет войти.')) return;
