@@ -131,7 +131,7 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
 </div>
 <div class="card">
   <p class="step"><i>III.</i> Работы</p>
-  <div id="rows"></div>
+  <div id="rows"></div><datalist id="unitList"></datalist>
   <div class="row2"><button class="add" id="addRow" type="button">+ Добавить работу</button><button class="add" id="addExtra" type="button">+ Доп. работы</button></div>
   <div class="muted" id="mode" style="margin-top:6px"></div>
   <label class="tax"><input type="checkbox" id="tax"> Добавить единый налог (4%) — сумма делится на 96%</label>
@@ -365,7 +365,7 @@ $('cLines').addEventListener('click', function (e) {
   var b = e.target.closest('[data-l]'); if (!b) return;
   var w = K.lines[+b.dataset.l], key = okey(w.name), unit = w.unit, price = w.price;
   K.lines.forEach(function (o) { if (okey(o.name) === key) { if (!unit && o.unit) unit = o.unit; if (isNaN(price) && !isNaN(o.price)) price = o.price; } });
-  var row = { name: w.name, unit: unit || 'шт', qty: '', price: isNaN(price) ? '' : price, extra: EXTRA };
+  var row = { name: w.name, unit: unit || 'шт.', qty: '', price: isNaN(price) ? '' : price, extra: EXTRA };
   var empty = ROWS.findIndex(function (r) { return !String(r.name).trim() && !!r.extra === EXTRA; });
   if (empty >= 0) ROWS[empty] = row; else ROWS.push(row);
   renderRows();
@@ -381,14 +381,29 @@ function rowSum(r) { var q = num(r.qty), p = num(r.price); return (isNaN(q) || i
 var EXTRA = false;
 function showMode() { $('mode').textContent = EXTRA ? 'Сейчас «+ в акт» добавляет в ДОП. РАБОТЫ (нумерация с 1). Нажмите «+ Добавить работу», чтобы вернуться к основным.' : ''; }
 function sortRows() { ROWS.sort(function (a, b) { return (a.extra ? 1 : 0) - (b.extra ? 1 : 0); }); }
-function addRow() { EXTRA = false; showMode(); ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: false }); sortRows(); renderRows(); }
-function addExtra() { EXTRA = true; showMode(); ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: true }); sortRows(); renderRows(); }
+function addRow() { EXTRA = false; showMode(); ROWS.push({ name: '', unit: 'шт.', qty: '', price: '', extra: false }); sortRows(); renderRows(); }
+function addExtra() { EXTRA = true; showMode(); ROWS.push({ name: '', unit: 'шт.', qty: '', price: '', extra: true }); sortRows(); renderRows(); }
+/* ---------- единицы измерения ---------- */
+var UNITS0 = ['м3', 'м2', 'компл.', 'шт.', 'п.м.'], UNITS = UNITS0.slice();
+function fillUnits() { $('unitList').innerHTML = UNITS.map(function (u) { return '<option value="' + esc(u) + '">'; }).join(''); }
+function loadUnits() {
+  try { (JSON.parse(localStorage.getItem('avr_units') || '[]') || []).forEach(function (u) { if (u && UNITS.indexOf(u) < 0) UNITS.push(u); }); } catch (e) {}
+  fillUnits();
+}
+function addUnit(u) {
+  u = String(u || '').trim();
+  if (!u || u.length > 20 || UNITS.indexOf(u) >= 0) return;
+  UNITS.push(u);
+  try { localStorage.setItem('avr_units', JSON.stringify(UNITS.filter(function (x) { return UNITS0.indexOf(x) < 0; }).slice(-30))); } catch (e) {}
+  fillUnits();
+}
+loadUnits();
 function renderRows() {
   var n = 0, ne = 0;
   $('rows').innerHTML = ROWS.map(function (r, i) {
     var no = r.extra ? ++ne : ++n;
     return (r.extra && ne === 1 ? '<div class="xh">Дополнительные работы<\/div>' : '') + '<div class="w' + (r.extra ? ' ex' : '') + '" data-i="' + i + '"><div class="top"><b>' + no + '.<\/b><input data-k="name" value="' + esc(r.name) + '" placeholder="Наименование работы"><button class="x" type="button" title="Удалить">×<\/button><\/div>' +
-      '<div class="nums"><input data-k="qty" value="' + esc(r.qty) + '" inputmode="decimal" placeholder="Кол-во"><input data-k="unit" value="' + esc(r.unit) + '" placeholder="ед. (м2)"><input data-k="price" value="' + esc(r.price) + '" inputmode="decimal" placeholder="Цена"><\/div>' +
+      '<div class="nums"><input data-k="qty" value="' + esc(r.qty) + '" inputmode="decimal" placeholder="Кол-во"><input data-k="unit" list="unitList" value="' + esc(r.unit) + '" placeholder="ед. изм."><input data-k="price" value="' + esc(r.price) + '" inputmode="decimal" placeholder="Цена"><\/div>' +
       '<div class="sum">' + fmt(rowSum(r)) + '<\/div><\/div>';
   }).join('');
   total();
@@ -402,9 +417,10 @@ $('rows').addEventListener('input', function (e) {
   var r = ROWS[+w.dataset.i]; r[e.target.dataset.k] = e.target.value;
   w.querySelector('.sum').textContent = fmt(rowSum(r)); total(); $('err').textContent = '';
 });
+$('rows').addEventListener('change', function (e) { if (e.target.dataset.k === 'unit') addUnit(e.target.value); });
 $('rows').addEventListener('click', function (e) {
   if (!e.target.closest('.x')) return;
-  ROWS.splice(+e.target.closest('.w').dataset.i, 1); if (!ROWS.length) ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: false }); renderRows();
+  ROWS.splice(+e.target.closest('.w').dataset.i, 1); if (!ROWS.length) ROWS.push({ name: '', unit: 'шт.', qty: '', price: '', extra: false }); renderRows();
 });
 $('addRow').addEventListener('click', addRow);
 $('addExtra').addEventListener('click', addExtra);
@@ -486,8 +502,8 @@ $('flr').addEventListener('input', showPrev);
 $('num').addEventListener('change', showPrev);
 $('prev').addEventListener('click', function (e) {
   if (!e.target.closest('#usePrev') || !PREV) return;
-  ROWS = PREV.rows.map(function (r) { return { name: r.name, unit: r.unit || 'шт', qty: isNaN(r.qty) || r.qty == null ? '' : r.qty, price: isNaN(r.price) || r.price == null ? '' : r.price, extra: !!r.extra }; });
-  if (!ROWS.length) ROWS.push({ name: '', unit: 'шт', qty: '', price: '', extra: false });
+  ROWS = PREV.rows.map(function (r) { return { name: r.name, unit: r.unit || 'шт.', qty: isNaN(r.qty) || r.qty == null ? '' : r.qty, price: isNaN(r.price) || r.price == null ? '' : r.price, extra: !!r.extra }; });
+  if (!ROWS.length) ROWS.push({ name: '', unit: 'шт.', qty: '', price: '', extra: false });
   sortRows(); renderRows();
 });
 function ruDate(iso) { if (!iso) return ''; var p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
@@ -505,18 +521,18 @@ function gather() {
   a.obj = a.objBase + (a.blk ? ', ' + (/^блок/i.test(a.blk) ? a.blk : 'блок ' + a.blk) : '') + (a.flr ? ', ' + (/^\d+$/.test(a.flr) ? a.flr + ' этаж' : a.flr) : '');
   a.net = 0; a.rows.forEach(function (r) { a.net += r.sum; }); a.net = Math.round(a.net * 100) / 100;
   a.taxOn = $('tax').checked; a.total = a.taxOn ? Math.round(a.net / 0.96 * 100) / 100 : a.net; a.tax = Math.round((a.total - a.net) * 100) / 100;
-  a.head = 'Акт выполненных работ ' + (a.title ? a.title + ' ' : '') + 'на основании договора №' + a.num;
+  a.head = ('Акт выполненных работ ' + (a.title ? a.title + ' ' : '') + (a.num ? 'на основании договора №' + a.num : '')).trim();
   return a;
 }
 function collect() {
   var a = gather();
-  var e = !a.num ? 'Выберите договор (шаг 1) или впишите номер.' : !a.exe ? 'Укажите исполнителя в «Подписи».' : !a.rows.length ? 'Добавьте хотя бы одну работу.' : '';
+  var e = !a.exe ? 'Укажите исполнителя в «Подписи».' : !a.rows.length ? 'Добавьте хотя бы одну работу.' : '';
   if (!e) { var bad = a.rows.findIndex(function (r) { return isNaN(r.qty) || isNaN(r.price); }); if (bad >= 0) e = 'Работа ' + (bad + 1) + ': укажите количество и цену.'; }
   $('err').textContent = e; $('ok').textContent = '';
   if (e) return null;
   saveSig();
   a.work = (a.title || (a.rows[0] && a.rows[0].name) || '').slice(0, 50).trim();
-  a.file = (a.date + ' — АВР №' + a.num + ' — ' + clean(a.exe) + (a.blk ? ' — бл.' + a.blk : '') + (a.flr ? ' эт.' + a.flr : '') + ' — ' + a.work).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+  a.file = (a.date + ' — АВР' + (a.num ? ' №' + a.num : '') + ' — ' + clean(a.exe) + (a.blk ? ' — бл.' + a.blk : '') + (a.flr ? ' эт.' + a.flr : '') + ' — ' + a.work).replace(/[\\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
   return a;
 }
 
@@ -760,7 +776,7 @@ $('sendSign').addEventListener('click', function () {
     if (!j.ok) throw new Error(j.error || 'ошибка');
     var inAct = {}; a.signers.concat(a.viewers).forEach(function (x) { inAct[nk(x.name)] = 1; });
     var others = j.users.filter(function (u) { return !inAct[nk(u.name)]; });
-    var h = '<p class="step" style="margin:0 0 6px">Кому отправить АВР №' + esc(a.num) + '<\/p><div class="muted">Из акта (получают всегда):<\/div>' +
+    var h = '<p class="step" style="margin:0 0 6px">Кому отправить АВР' + (a.num ? ' №' + esc(a.num) : '') + '<\/p><div class="muted">Из акта (получают всегда):<\/div>' +
       a.signers.map(function (x) { return '<div>✔ ' + esc(x.role) + ': <b>' + esc(x.name) + '<\/b><\/div>'; }).join('') +
       (a.viewers.length ? '<div class="muted" style="margin-top:6px">Только просмотр (без подписи):<\/div>' + a.viewers.map(function (x) { return '<div>👁 ' + esc(x.role) + ': <b>' + esc(x.name) + '<\/b><\/div>'; }).join('') : '') +
       '<div class="muted" style="margin-top:8px">Все, кто вошёл в приложение по своему коду:<\/div>' +
