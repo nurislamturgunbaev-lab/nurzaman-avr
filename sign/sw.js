@@ -1,5 +1,5 @@
 /* АВР — Подписи: кешируется только оболочка приложения; акты всегда берутся свежими. */
-var CACHE = 'avr-sign-v4';
+var CACHE = 'avr-sign-v5';
 var SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'];
@@ -35,6 +35,7 @@ self.addEventListener('push', function (e) {
       var t = 'АВР — Подписи', b = 'Откройте приложение', tag = 'avr', must = false;
       if (j && j.ok && j.confirms && j.confirms.length) { var c = j.confirms[0]; t = 'Подтвердите подпись АВР №' + c.num; b = 'Запрос с компьютера · ' + c.exe + ' · ' + c.total + '. Нажмите и подтвердите Face ID.'; tag = 'c' + c.cid; must = true; }
       else if (j && j.ok && j.waiting) { t = 'АВР на подпись: ' + j.waiting; b = 'Откройте приложение, чтобы посмотреть и подписать.'; tag = 'wait'; }
+      else if (j && j.ok && j.late) { t = 'Акт подписан, а PDF не готов'; b = 'Откройте приложение и нажмите «Сформировать подписанный PDF».'; tag = 'late'; }
       return self.clients.matchAll({ type: 'window' }).then(function (cs) { cs.forEach(function (w) { w.postMessage('push'); }); })
         .then(function () { return self.registration.showNotification(t, { body: b, icon: 'icon-192.png', badge: 'icon-192.png', tag: tag, renotify: true, requireInteraction: must, data: { url: './' } }); });
     }));
