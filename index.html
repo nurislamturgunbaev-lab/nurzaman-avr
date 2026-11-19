@@ -769,10 +769,36 @@ function extraHtml(a, marks) {
   if (!a.extra || !a.extra.length) return '';
   return '<div class="grp">Согласовано электронно:<\/div>' + a.extra.map(function (x) { return '<div class="sg2"><span>' + esc(x.role) + '<\/span><span class="ln2">' + (marks ? '{{S' + x.idx + '}}' : '') + '<\/span><span class="nm">' + esc(x.name) + '<\/span><\/div>'; }).join('');
 }
+function sgTok(v) { try { if (v === undefined) return localStorage.getItem('avr_sg_tok') || ''; v === null ? localStorage.removeItem('avr_sg_tok') : localStorage.setItem('avr_sg_tok', v); } catch (e) {} return v || ''; }
+function sgApi(body) {
+  body.token = sgTok(); body.site = SIGN_SITE;   // ключ нужен только на время обновления сервера
+  return fetch(SIGN_API, { method: 'POST', body: JSON.stringify(body) }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.ok) { if (/войдите заново|только для администратора|смените пароль/.test(j.error || '')) sgTok(null); throw new Error(j.error || 'ошибка'); }
+    return j;
+  });
+}
+/* вход администратора — тем же ФИО и паролем, что и в приложении «АВР — Подписи» */
+function sgLogin(box, after) {
+  box.innerHTML = '<p class="step" style="margin:0 0 6px">Список сотрудников — только для администратора<\/p>' +
+    '<label>ФИО (как в приложении)<\/label><input id="sgN" autocomplete="name" value="Тургунбаев Нурислам">' +
+    '<label>Пароль из приложения «АВР — Подписи»<\/label><input id="sgP" type="password" autocomplete="current-password">' +
+    '<div class="row2" style="margin-top:8px"><button type="button" id="sgGo" class="pri">Войти<\/button><button type="button" id="sgNo">Отмена<\/button><\/div><div class="err" id="sgE"><\/div>';
+  $('sgNo').onclick = function () { box.style.display = 'none'; };
+  $('sgGo').onclick = function () {
+    var b = this; b.disabled = true; $('sgE').textContent = '';
+    fetch(SIGN_API, { method: 'POST', body: JSON.stringify({ sign_api: 'login', name: $('sgN').value, code: $('sgP').value, device: 'сайт АВР' }) })
+      .then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.ok) throw new Error(j.error || 'ошибка');
+        if (!j.me || !j.me.admin) throw new Error('это не администратор');
+        sgTok(j.token); after();
+      }).catch(function (e) { $('sgE').textContent = e.message; b.disabled = false; });
+  };
+}
 $('sendSign').addEventListener('click', function () {
   var a = collect(); if (!a) return;
   var box = $('sendBox'); box.style.display = 'block'; box.innerHTML = '<div class="muted">Загружаю список…<\/div>';
-  fetch(SIGN_API, { method: 'POST', body: JSON.stringify({ sign_api: 'users', site: SIGN_SITE }) }).then(function (r) { return r.json(); }).then(function (j) {
+  if (!sgTok()) return sgLogin(box, function () { $('sendSign').click(); });
+  sgApi({ sign_api: 'users' }).then(function (j) {
     if (!j.ok) throw new Error(j.error || 'ошибка');
     var inAct = {}; a.signers.concat(a.viewers).forEach(function (x) { inAct[nk(x.name)] = 1; });
     var others = j.users.filter(function (u) { return !inAct[nk(u.name)]; });
@@ -797,7 +823,10 @@ $('sendSign').addEventListener('click', function () {
       }).catch(function (e) { $('err').textContent = 'На подпись не отправлено: ' + (e.message || e); })
         .then(function () { b.disabled = false; b.textContent = '📲 Отправить'; });
     };
-  }).catch(function (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '<\/div>'; });
+  }).catch(function (e) {
+    if (!sgTok()) return sgLogin(box, function () { $('sendSign').click(); });
+    box.innerHTML = '<div class="err">' + esc(e.message) + '<\/div>';
+  });
 });
 function pdfFromHtml(html) {
   var el = $('sheet'); el.innerHTML = html;
