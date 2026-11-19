@@ -650,7 +650,7 @@ function toDrive(a, docxBlob, pdfBlob, printAt, noSign) {
   var key = a.file + '|' + a.total + '|' + (printAt || '') + '|' + signOn() + '|' + (a.extra ? a.extra.map(function (x) { return x.name; }).join(',') : ''); if (SENT[key]) return Promise.resolve(SENT[key]);
   $('drv').textContent = 'Сохраняю в Google Диск…';
   return Promise.all([b64(docxBlob), b64(pdfBlob)]).then(function (d) {
-    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ date: a.date, printAt: printAt || '', files: [
+    return fetch(UPLOAD_URL, { method: 'POST', body: JSON.stringify({ site: SIGN_SITE, date: a.date, printAt: printAt || '', files: [
       { name: a.file + '.docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', data: d[0] },
       { name: a.file + '.pdf', mime: 'application/pdf', data: d[1] }],
       log: { key: a.file, date: a.date, num: a.num, exe: a.exe, obj: a.objBase, blk: a.blk, flr: a.flr, total: a.total, rows: a.rows, sig: { approve: a.approve, accept: a.accept } } }) });
@@ -772,7 +772,7 @@ function extraHtml(a, marks) {
 $('sendSign').addEventListener('click', function () {
   var a = collect(); if (!a) return;
   var box = $('sendBox'); box.style.display = 'block'; box.innerHTML = '<div class="muted">Загружаю список…<\/div>';
-  fetch(SIGN_API, { method: 'POST', body: JSON.stringify({ sign_api: 'users' }) }).then(function (r) { return r.json(); }).then(function (j) {
+  fetch(SIGN_API, { method: 'POST', body: JSON.stringify({ sign_api: 'users', site: SIGN_SITE }) }).then(function (r) { return r.json(); }).then(function (j) {
     if (!j.ok) throw new Error(j.error || 'ошибка');
     var inAct = {}; a.signers.concat(a.viewers).forEach(function (x) { inAct[nk(x.name)] = 1; });
     var others = j.users.filter(function (u) { return !inAct[nk(u.name)]; });
