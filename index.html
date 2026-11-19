@@ -659,7 +659,7 @@ function signMsg(r) {
   if (!r) return '';
   if (r.error) return '<br><span style="color:var(--warn)">На подпись не отправлено: ' + esc(r.error) + '<\/span>';
   var h = '<br><b>' + (r.same ? 'Уже на подписи' : 'Отправлено на подпись') + ': ' + r.count + ' чел.<\/b>';
-  if (r.newUsers && r.newUsers.length) h += '<br>Новые подписанты: ' + r.newUsers.map(function (u) { return esc(u.name); }).join(', ') + ' — входят в приложение со своим ФИО и паролем 1234.';
+  if (r.newUsers && r.newUsers.length) h += '<br>Новые подписанты — передайте им код для первого входа: ' + r.newUsers.map(function (u) { return esc(u.name) + ' — <b>' + esc(u.code || '—') + '<\/b>'; }).join(', ') + '. Коды всегда видны в приложении, раздел «Сотрудники».';
   return h;
 }
 /* ---------- отправка на подпись (сервер подписей, без Google) ---------- */
