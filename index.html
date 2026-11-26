@@ -150,6 +150,13 @@ details summary{cursor:pointer;color:var(--acc);font-weight:bold}
   </details>
 </div>
 
+<div class="card" id="hsCard" style="display:none">
+  <p class="step" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><i>📜</i> <span id="hsTitle">Прежние работы по блоку</span><button type="button" id="hsRe" class="add" style="margin-left:auto;width:auto;padding:6px 10px">⟳</button></p>
+  <div class="muted" id="hsBelow"></div>
+  <div class="hstypes" id="hsTypes"></div>
+  <div id="hsList"></div>
+  <div class="row2" id="hsNav" style="margin-top:8px"><button type="button" class="add" id="hsUp">▲ Выше</button><button type="button" class="add" id="hsDn">Ниже ▼</button></div>
+</div>
 <div class="go" style="margin-top:4px">
   <button class="pri" type="button" data-rp="office">🖨 Печать — Офис</button>
   <button class="pri" type="button" data-rp="shtab">🖨 Печать — Штаб</button>
@@ -280,6 +287,7 @@ function build() {
   $('st').textContent = 'Договоров: ' + CONTRACTS.length + ', подрядчиков: ' + Object.keys(ppl).length;
   fillLists();
   loadFix();
+  loadEdit();
 }
 /* ---------- списки объектов и блоков ---------- */
 function opts(list) { var seen = {}, out = []; list.forEach(function (v) { v = String(v || '').trim(); var k = okey(v); if (v && !seen[k]) { seen[k] = 1; out.push(v); } }); return out.sort(function (a, b) { return a.localeCompare(b, 'ru'); }).map(function (v) { return '<option value="' + esc(v) + '">'; }).join(''); }
@@ -356,6 +364,7 @@ function pick(k) {
   ROWS = []; addRow();
   loadSig();
   showPrev();
+  if (typeof hsLoad === 'function') { HS.type = ''; hsLoad(true); }
 }
 function descr(k) {
   var t = String(k.title || '').replace(/\s+[-–—]\s+\d[\s\S]*$/, '').trim();
@@ -476,35 +485,55 @@ $('obj').addEventListener('change', loadSig);
 function flrN(s) { var m = String(s || '').match(/-?\d+/); return m ? +m[0] : NaN; }
 function dkey(d) { var p = String(d || '').split('.'); return p.length === 3 ? p[2] + p[1] + p[0] : ''; }
 var PREV = null;
+var PREVS = [], PREVI = 0, PREVK = '';
+function prevRoot(v) { return okey(String(v || '').split('/')[0]); }
+function prevMine(x) { var n = prevRoot($('num').value), me = nk($('exe').value).split(' ')[0]; return (n && prevRoot(x.num) === n) || (me && nk(x.exe).split(' ')[0] === me); }
 function showPrev() {
   var box = $('prev'), n = okey($('num').value), b = okey($('blk').value), f = flrN($('flr').value);
   PREV = null;
-  if (!n) { box.style.display = 'none'; return; }
-  var all = LOG.filter(function (x) { return okey(x.num) === n; });
-  var same = b ? all.filter(function (x) { return okey(x.blk) === b; }) : all;
-  same.sort(function (x, y) { return (dkey(x.date) + x.at) < (dkey(y.date) + y.at) ? -1 : 1; });
-  var p = same[same.length - 1];
-  if (!p) { box.style.display = all.length || b ? 'block' : 'none'; box.innerHTML = '<span class="muted">' + (b && all.length ? 'По блоку «' + esc($('blk').value) + '» прошлых АВР нет (по договору — ' + all.length + ').' : 'Прошлых АВР по этому договору в журнале нет.') + '<\/span>'; return; }
-  PREV = p;
+  if (!n && !b) { box.style.display = 'none'; return; }
+  var mine = LOG.filter(function (x) { return prevMine(x); });
+  var types = {}; ((K && K.lines) || []).concat([].concat.apply([], mine.map(function (x) { return x.rows; }))).forEach(function (l) { var t = hsType(l.name || ''); if (t) types[t] = 1; });
+  var others = b ? LOG.filter(function (x) { return okey(x.blk) === b && !prevMine(x) && x.rows.some(function (r) { var t = hsType(r.name || ''); return !Object.keys(types).length || types[t]; }); }) : [];
+  var dsc = function (x, y) { return (dkey(x.date) + x.at) < (dkey(y.date) + y.at) ? 1 : -1; };
+  var near = function (x, y) { if (isNaN(f)) return 0; var a = Math.abs(flrN(x.flr) - (f - 1)), c = Math.abs(flrN(y.flr) - (f - 1)); return (isNaN(a) ? 99 : a) - (isNaN(c) ? 99 : c); };
+  var mb = mine.filter(function (x) { return b && okey(x.blk) === b; }).sort(dsc), mo = mine.filter(function (x) { return !(b && okey(x.blk) === b); }).sort(dsc);
+  others.sort(function (x, y) { return near(x, y) || dsc(x, y); });
+  var list = mb.concat(others).concat(mo);
+  var key = n + '|' + b + '|' + f + '|' + list.length;
+  if (key !== PREVK) { PREVK = key; PREVI = 0;
+    if (!isNaN(f)) { var ix = list.findIndex(function (x) { return okey(x.blk) === b && flrN(x.flr) === f - 1; }); if (ix < 0) ix = list.findIndex(function (x) { return okey(x.blk) === b && flrN(x.flr) === f; }); if (ix >= 0) PREVI = ix; } }
+  PREVS = list;
+  if (!list.length) { box.style.display = 'block'; box.innerHTML = '<span class="muted">' + (b ? 'По блоку «' + esc($('blk').value) + '» прошлых АВР нет.' : 'Прошлых АВР по этому договору в журнале нет.') + '<\/span>'; return; }
+  PREVI = Math.max(0, Math.min(PREVI, list.length - 1));
+  var p = list[PREVI], own = prevMine(p); PREV = p;
   var pf = flrN(p.flr), h = '';
-  if (!isNaN(f) && !isNaN(pf) && f > pf) h += '<p class="up">Этаж ' + f + ' выше прошлого (' + pf + '). В прошлом АВР было:<\/p>';
-  else if (!isNaN(f) && !isNaN(pf) && f === pf) h += '<p class="up">На этаж ' + f + ' уже был АВР:<\/p>';
-  h += '<b>Последний АВР' + (p.blk ? ', блок ' + esc(p.blk) : '') + (p.flr ? ', этаж ' + esc(p.flr) : '') + '<\/b> — от ' + esc(p.date) + '<table>';
+  h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><button type="button" class="add" id="pvL" style="width:auto;padding:4px 12px"' + (PREVI <= 0 ? ' disabled' : '') + '>◀<\/button><span class="muted" style="flex:1;text-align:center">' + (PREVI + 1) + ' из ' + list.length + ' · ' + (own ? 'по этому договору' : '<b style="color:#b05a00">другой подрядчик<\/b>') + '<\/span><button type="button" class="add" id="pvR" style="width:auto;padding:4px 12px"' + (PREVI >= list.length - 1 ? ' disabled' : '') + '>▶<\/button><\/div>';
+  if (!isNaN(f) && !isNaN(pf) && okey(p.blk) === b) { if (pf === f - 1) h += '<p class="up">Этажом ниже (' + pf + ') было:<\/p>'; else if (f > pf) h += '<p class="up">Этаж ' + f + ' выше прошлого (' + pf + '). Там было:<\/p>'; else if (f === pf) h += '<p class="up">На этаж ' + f + ' уже был АВР:<\/p>'; }
+  h += '<b>' + (own ? 'АВР' : esc(p.exe || '—')) + (p.blk ? ', блок ' + esc(p.blk) : '') + (p.flr ? ', этаж ' + esc(p.flr) : '') + '<\/b> — от ' + esc(p.date) + (own ? '' : ' <span class="muted">(дог. №' + esc(p.num) + ')<\/span>') + '<table>';
   p.rows.forEach(function (r) { h += '<tr><td>' + esc(r.name) + (r.extra ? ' <small>(доп.)<\/small>' : '') + '<\/td><td class="n">' + fmt(r.qty) + ' ' + esc(r.unit || '') + '<\/td><td class="n">' + fmt(r.sum) + '<\/td><\/tr>'; });
   h += '<tr><td colspan="2"><b>Сумма<\/b><\/td><td class="n"><b>' + fmt(p.total) + '<\/b><\/td><\/tr><\/table>';
-  var tot = 0; all.forEach(function (x) { if (!isNaN(x.total)) tot += x.total; });
-  if (all.length > 1) h += '<div class="muted" style="margin-top:6px">Всего по договору прошлых АВР: ' + all.length + ' на ' + fmt(tot) + '<\/div>';
-  h += '<button type="button" class="add" id="usePrev">Взять те же работы и объёмы<\/button>';
+  var tot = 0; mine.forEach(function (x) { if (!isNaN(x.total)) tot += x.total; });
+  if (mine.length) h += '<div class="muted" style="margin-top:6px">Всего по договору прошлых АВР: ' + mine.length + ' на ' + fmt(tot) + '<\/div>';
+  h += '<button type="button" class="add" id="usePrev">' + (own ? 'Взять те же работы и объёмы' : 'Взять объёмы (цены и ед. изм. — из моего договора)') + '<\/button>';
   box.innerHTML = h; box.style.display = 'block';
 }
 $('blk').addEventListener('input', showPrev);
 $('flr').addEventListener('input', showPrev);
 $('num').addEventListener('change', showPrev);
 $('prev').addEventListener('click', function (e) {
+  if (e.target.closest('#pvL')) { PREVI--; showPrev(); return; }
+  if (e.target.closest('#pvR')) { PREVI++; showPrev(); return; }
   if (!e.target.closest('#usePrev') || !PREV) return;
-  ROWS = PREV.rows.map(function (r) { return { name: r.name, unit: r.unit || 'шт.', qty: isNaN(r.qty) || r.qty == null ? '' : r.qty, price: isNaN(r.price) || r.price == null ? '' : r.price, extra: !!r.extra }; });
+  var own = prevMine(PREV), tk = function (s) { return String(s || '').toLowerCase().replace(/[^а-яёa-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 3; }); };
+  ROWS = PREV.rows.map(function (r) {
+    var row = { name: r.name, unit: r.unit || 'шт.', qty: isNaN(r.qty) || r.qty == null ? '' : r.qty, price: isNaN(r.price) || r.price == null ? '' : r.price, extra: !!r.extra };
+    if (!own) { var c = null, best = 0, t = hsType(r.name), xt = tk(r.name); ((K && K.lines) || []).forEach(function (o) { if (isNaN(o.price) || (t && hsType(o.name) !== t)) return; var sc = tk(o.name).filter(function (w) { return xt.indexOf(w) >= 0; }).length + 1; if (sc > best) { best = sc; c = o; } });
+      if (c) { row.name = c.name; row.price = c.price; if (c.unit) row.unit = c.unit; } else row.price = ''; }
+    return row; });
   if (!ROWS.length) ROWS.push({ name: '', unit: 'шт.', qty: '', price: '', extra: false });
   sortRows(); renderRows();
+  if (!own) $('ok').textContent = 'Взяты объёмы из АВР ' + (PREV.exe || '') + '. Цены и ед. изм. — из вашего договора' + (ROWS.some(function (r) { return r.price === ''; }) ? '; где работы нет в договоре — укажите цену' : '') + '. Проверьте и измените при необходимости.';
 });
 function ruDate(iso) { if (!iso) return ''; var p = iso.split('-'); return p[2] + '.' + p[1] + '.' + p[0]; }
 (function () { var d = new Date(); $('date').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
@@ -699,6 +728,32 @@ function toSign(a) {
       return j;
     }).catch(function (e) { $('sgm').innerHTML = signMsg({ error: e.message || String(e) }).replace(/^<br>/, ''); throw e; });
 }
+/* ---------- ✎ Изменить сформированный АВР (ссылка ?edit=<имя файла> из приложения «Объекты») ---------- */
+var EDIT_KEY = (function () { try { return new URLSearchParams(location.search).get('edit') || ''; } catch (e) { return ''; } })();
+function loadEdit() {
+  if (!EDIT_KEY) return;
+  var go = function () {
+    var L = LOG.filter(function (x) { return x.key === EDIT_KEY; }).pop();
+    var m = EDIT_KEY.match(/^(\d{2})\.(\d{2})\.(\d{4}) — АВР(?: №([^—]+?))? — (.+?)(?: — бл\.(\S+)(?: эт\.(\S+))?)?(?: — .*)?$/);
+    var num = L ? L.num : m && m[4] ? m[4].trim() : '';
+    var k = CONTRACTS.filter(function (x) { return okey(x.num) === okey(num); })[0];
+    if (k) pick(k);
+    if (L) {
+      var d = String(L.date).split('.'); if (d.length === 3) $('date').value = d[2] + '-' + d[1] + '-' + d[0];
+      $('num').value = L.num; if (L.obj) $('obj').value = L.obj; $('blk').value = L.blk || ''; $('flr').value = L.flr || ''; if (L.exe) $('exe').value = L.exe;
+      if (L.sig && L.sig.approve && L.sig.accept) { SIG = { approve: L.sig.approve, accept: L.sig.accept }; renderSig(); }
+      if (L.rows && L.rows.length) { ROWS = L.rows.map(function (r) { return { name: r.name, unit: r.unit, qty: r.qty, price: r.price, extra: !!r.extra }; }); sortRows(); renderRows(); }
+    } else if (m) {
+      $('date').value = m[3] + '-' + m[2] + '-' + m[1]; if (num) $('num').value = num; if (m[6]) $('blk').value = m[6]; if (m[7]) $('flr').value = m[7];
+    }
+    total(); showPrev(); preview(); if (typeof hsLoad === 'function') hsLoad(true);
+    var box = document.createElement('div'); box.id = 'editBox'; box.className = 'card adm';
+    box.innerHTML = '<b>✎ Изменение сформированного акта<\/b><div class="muted">' + esc(EDIT_KEY) + '<\/div><div class="muted" style="margin-top:6px">' + (L ? 'Работы и объёмы загружены.' : 'Работы этого старого акта в журнале не сохранены — добавьте их заново (можно из «Прежних работ» внизу).') + ' Исправьте и нажмите «Сохранить акт» — файлы с тем же именем заменятся.<\/div>';
+    $('ctr').parentNode.insertBefore(box, $('ctr')); box.scrollIntoView({ behavior: 'smooth' });
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  };
+  if (LOG && LOG.length) go(); else loadLog(go);
+}
 function loadFix() {
   if (!FIX_ID) return;
   fetch(SIGN_API, { method: 'POST', body: JSON.stringify({ sign_api: 'form', site: SIGN_SITE, id: FIX_ID }) }).then(function (r) { return r.json(); }).then(function (j) {
@@ -884,6 +939,105 @@ $('share').addEventListener('click', function () {
   }).catch(function (e) { $('err').textContent = 'Ошибка: ' + e; }).then(function () { busy(b, false, 'Отправить в WhatsApp / Telegram'); });
 });
 preview();
+/* ---------- 🛡 Сторож переплат: проверка до формирования ---------- */
+var GUARD_URL = 'https://script.google.com/macros/s/AKfycbyp8Fa5xU6sQPjSzkR5eLTnRfueW4qFOVHpWq4BS1hUeNQfCVSLK-Vivs7ruJiPYpQ/exec';
+var GOK = '';
+(function () { var st = document.createElement('style'); st.textContent = '.gd{display:none;margin:10px 0;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45}.gd.stop{display:block;background:#fdecec;border:2px solid #c0392b;color:#7a1f16}.gd.warn{display:block;background:#fff6e0;border:1px solid #e6b54a;color:#6b4a00}.gd.okk{display:block;background:#e6f6ec;border:1px solid #7cc596;color:#1b5e33}.gd b.t{display:block;font-size:15px;margin-bottom:4px}.gd ul{margin:4px 0 0;padding-left:18px}.gd li{margin:3px 0}.gd button{margin-top:8px}'; document.head.appendChild(st); })();
+function gHash(a) { return JSON.stringify([a.num, a.date, a.objBase, a.blk, a.flr, a.exe, a.rows.map(function (r) { return [r.name, r.unit, r.qty, r.price]; })]); }
+function gBox() { var g = $('guardBox'); if (!g) { g = document.createElement('div'); g.id = 'guardBox'; g.className = 'gd'; $('err').parentNode.insertBefore(g, $('err')); } return g; }
+function gList(t, a) { return a.length ? '<b class="t">' + t + '<\/b><ul>' + a.map(function (x) { return '<li>' + esc(x) + '<\/li>'; }).join('') + '<\/ul>' : ''; }
+function gShow(st, wr, h, again) {
+  var g = gBox();
+  if (st.length) { g.className = 'gd stop'; g.innerHTML = gList('⛔ Сторож переплат: акт заблокирован', st) + (wr.length ? gList('Предупреждения', wr) : '') + '<div style="margin-top:6px">Исправьте цену, объём, блок/этаж или исполнителя — после исправления акт проверится снова.<\/div>' + (admKey() ? '<button type="button" id="gForce">Сформировать всё равно (администратор)<\/button>' : '');
+    var f = $('gForce'); if (f) f.onclick = function () { GOK = h; g.className = 'gd warn'; g.innerHTML = '<b class="t">Разрешено администратором<\/b>Нажмите нужную кнопку ещё раз.'; }; }
+  else if (wr.length) { g.className = 'gd warn'; g.innerHTML = gList('🛡 Нарушений нет, но есть предупреждения', wr) + (again ? '<div style="margin-top:6px"><b>Нажмите кнопку ещё раз.<\/b><\/div>' : ''); }
+  else { g.className = 'gd okk'; g.innerHTML = '<b class="t">🛡 Сторож: нарушений нет<\/b>Повторов, превышений проекта и цен выше договора не найдено.' + (again ? ' <b>Нажмите кнопку ещё раз.<\/b>' : ''); }
+  g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function gCheck(a) {
+  return fetch(GUARD_URL, { method: 'POST', body: JSON.stringify({ site: SIGN_SITE, fn: 'avrCheckGh', args: [{ num: a.num, date: a.date, objBase: a.objBase, blk: a.blk, flr: a.flr, exe: a.exe, rows: a.rows.map(function (r) { return { name: r.name, unit: r.unit, qty: r.qty, price: r.price }; }) }] }) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (!j.ok) throw new Error(j.error || 'ошибка'); return j.result; });
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('#pdf,#print,#word,#share,[data-rp],#sendSign,#sxGo'); if (!b) return;
+  var a = gather(); if (!a.exe || !a.rows.length) return;
+  var h = gHash(a); if (GOK === h) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (b.dataset.gb) return; b.dataset.gb = '1'; var lbl = b.textContent; b.disabled = true; b.textContent = '🛡 Проверяю…';
+  var manual = b.id === 'share' || b.id === 'print';
+  function done() { delete b.dataset.gb; b.disabled = false; b.textContent = lbl; }
+  gCheck(a).then(function (g) {
+    gShow(g.stops, g.warns, h, manual && !g.stops.length);
+    if (g.stops.length) { $('err').textContent = 'АВР НЕ сформирован — сторож нашёл нарушения.'; done(); return; }
+    GOK = h; done(); if (!manual) b.click();
+  }).catch(function (x) {
+    var g = gBox(); g.className = 'gd warn'; g.innerHTML = '<b class="t">Сторож сейчас недоступен<\/b>' + esc(x && x.message || x) + '. Акт можно сформировать, проверка пройдёт в журнале позже. Нажмите кнопку ещё раз.';
+    GOK = h; done();
+  });
+}, true);
+['num', 'blk', 'flr', 'exe', 'obj', 'date'].forEach(function (id) { var el = $(id); if (el) el.addEventListener('input', function () { var g = $('guardBox'); if (g && !/stop/.test(g.className)) g.className = 'gd'; }); });
+/* ---------- 📜 Прежние работы по блоку (все подрядчики) ---------- */
+var HS = { key: '', items: [], type: '', page: 0, busy: false }, HS_TYPES = [['Газоблок', /газоблок|газобетон|газоблоч/i], ['Сердечники и уголки', /сердечник|уголк|прут/i], ['Монолит', /монолит|опалубк|армир|заливк|бетон(?!ных отверст)/i],
+  ['Отделка', /отделк|вайт бокс|штукатур|шпакл|гкл|откос|покраск/i], ['Стяжка', /стяжк/i], ['Электрика', /кабел|электр|щит|розет|подразетн|шланг/i], ['Сантехника', /сантех|канализ|водопров|отоплен|ппр|труб/i],
+  ['Вентиляция', /вентил|дымоуд/i], ['Сверление', /сверлен/i], ['Фасад', /фасад|керамогранит/i], ['Кровля', /кровл|крыш|чердак/i], ['Сварка', /свар/i], ['Окна и двери', /окн|двер|витраж/i]];
+(function () { var st = document.createElement('style'); st.textContent = '.hstypes{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.hstypes button{width:auto;padding:5px 10px;border-radius:999px;font-size:13px}.hstypes button.on{background:#7c2a20;color:#fff;border-color:#7c2a20}.hsf{border-top:1px solid #eee;padding:8px 0}.hsf>b{display:block;margin-bottom:4px}.hsf.cur>b{color:#7c2a20}.hsi{display:flex;gap:8px;align-items:flex-start;padding:5px 0;font-size:13.5px}.hsi .t{flex:1}.hsi small{display:block;color:#777}.hsi .oth{color:#b05a00;font-weight:bold}.hsi button{width:auto;padding:5px 9px;white-space:nowrap;font-size:13px}.hsb{background:#fff6e0;border:1px solid #e6b54a;border-radius:10px;padding:8px 10px;margin:6px 0;color:#6b4a00}'; document.head.appendChild(st); })();
+function hsType(n) { for (var i = 0; i < HS_TYPES.length; i++) if (HS_TYPES[i][1].test(n)) return HS_TYPES[i][0]; return ''; }
+function hsUnit(u) { u = String(u || ''); return u === 'м³' ? 'м3' : u === 'м²' ? 'м2' : u === 'шт' ? 'шт.' : u === 'п.м' ? 'п.м.' : u; }
+function hsFl(f) { return f === 'R' ? 'Кровля' : f === '-1' ? 'Подвал' : f === '?' ? 'Этаж не указан' : f + ' этаж'; }
+function hsMe() { return nk($('exe').value).split(' ')[0]; }
+function hsLoad(force) {
+  var obj = $('obj').value.trim(), blk = $('blk').value.trim(); var key = obj + '|' + blk;
+  if (!blk) { $('hsCard').style.display = 'none'; return; }
+  if (!force && key === HS.key) return hsRender(); HS.key = key; HS.page = 0;
+  $('hsCard').style.display = 'block'; $('hsTitle').textContent = 'Прежние работы по блоку ' + blk; $('hsList').innerHTML = '<div class="muted">Загружаю историю…<\/div>';
+  fetch(GUARD_URL, { method: 'POST', body: JSON.stringify({ site: SIGN_SITE, fn: 'avrHistGh', args: [{ obj: obj, blk: blk }] }) }).then(function (r) { return r.json(); }).then(function (j) {
+    if (HS.key !== key) return; if (!j.ok) throw new Error(j.error || 'ошибка'); HS.items = j.result.items || [];
+    if (!HS.type) { var t = ROWS.map(function (r) { return hsType(r.name); }).filter(Boolean)[0] || (K && K.lines ? K.lines.map(function (l) { return hsType(l.name); }).filter(Boolean)[0] : ''); HS.type = t || ''; }
+    hsRender();
+  }).catch(function (e) { $('hsList').innerHTML = '<div class="muted">История пока недоступна: ' + esc(e.message || e) + '<\/div>'; });
+}
+function hsRender() {
+  var me = hsMe(), cur = parseInt($('flr').value, 10), all = HS.items, tc = {};
+  all.forEach(function (x) { tc[x.type] = (tc[x.type] || 0) + 1; });
+  $('hsTypes').innerHTML = '<button type="button" data-ht=""' + (!HS.type ? ' class="on"' : '') + '>Все (' + all.length + ')<\/button>' + Object.keys(tc).map(function (t) { return '<button type="button" data-ht="' + esc(t) + '"' + (HS.type === t ? ' class="on"' : '') + '>' + esc(t) + ' (' + tc[t] + ')<\/button>'; }).join('');
+  var l = all.filter(function (x) { return !HS.type || x.type === HS.type; });
+  // кто работал этажом ниже
+  var below = !isNaN(cur) ? l.filter(function (x) { return +x.floor === cur - 1; }) : [];
+  $('hsBelow').innerHTML = !isNaN(cur) ? (below.length ? '<div class="hsb">⬇ Ниже, на ' + (cur - 1) + ' этаже: ' + below.slice(0, 4).map(function (x) { return '<b>' + esc(x.type) + '<\/b> — ' + esc(x.who) + (nk(x.who).split(' ')[0] !== me ? ' <span class="oth">(другой подрядчик)<\/span>' : '') + ', ' + fmt(x.vol) + ' ' + esc(hsUnit(x.unit)); }).join('; ') + '<\/div>' : '<div class="muted">На ' + (cur - 1) + ' этаже по «' + esc(HS.type || 'всем работам') + '» актов нет.<\/div>') : '';
+  var floors = []; l.forEach(function (x) { if (floors.indexOf(x.floor) < 0) floors.push(x.floor); });
+  var per = 4, pages = Math.max(1, Math.ceil(floors.length / per));
+  if (!isNaN(cur) && HS.page === 0 && !HS.moved) { var ix = floors.indexOf(String(cur)); if (ix < 0) ix = floors.indexOf(String(cur - 1)); if (ix > 0) HS.page = Math.floor(ix / per); }
+  HS.page = Math.max(0, Math.min(HS.page, pages - 1));
+  var show = floors.slice(HS.page * per, HS.page * per + per);
+  $('hsList').innerHTML = show.length ? show.map(function (f) {
+    return '<div class="hsf' + (+f === cur ? ' cur' : '') + '"><b>' + hsFl(f) + (+f === cur ? ' — текущий' : +f === cur - 1 ? ' — ниже текущего' : '') + '<\/b>' + l.filter(function (x) { return x.floor === f; }).map(function (x) { var i = HS.items.indexOf(x), oth = me && nk(x.who).split(' ')[0] !== me;
+      return '<div class="hsi"><div class="t">' + esc(x.name) + '<small>' + esc(x.type) + ' · ' + esc(x.who) + (oth ? ' <span class="oth">другой подрядчик<\/span>' : '') + ' · АВР/дог. №' + esc(x.num || '—') + ' от ' + esc(x.date || '') + (x.src === 'formed' ? ' · сформирован, не подписан' : '') + '<br>' + fmt(x.vol) + ' ' + esc(hsUnit(x.unit)) + (x.price ? ' × ' + fmt(x.price) : '') + '<\/small><\/div><button type="button" data-hadd="' + i + '">＋ в акт<\/button><\/div>'; }).join('') + '<\/div>'; }).join('')
+    : '<div class="muted">По блоку ' + esc($('blk').value) + (HS.type ? ' и виду «' + esc(HS.type) + '»' : '') + ' прежних работ нет.<\/div>';
+  $('hsUp').disabled = HS.page <= 0; $('hsDn').disabled = HS.page >= pages - 1;
+  $('hsNav').style.display = pages > 1 ? '' : 'none';
+}
+$('hsTypes').addEventListener('click', function (e) { var b = e.target.closest('[data-ht]'); if (!b) return; HS.type = b.dataset.ht; HS.page = 0; HS.moved = false; hsRender(); });
+$('hsUp').addEventListener('click', function () { HS.page--; HS.moved = true; hsRender(); });
+$('hsDn').addEventListener('click', function () { HS.page++; HS.moved = true; hsRender(); });
+$('hsRe').addEventListener('click', function () { hsLoad(true); });
+$('hsList').addEventListener('click', function (e) {
+  var b = e.target.closest('[data-hadd]'); if (!b) return; var x = HS.items[+b.dataset.hadd];
+  // единица и цена — из договора текущего подрядчика (та же работа), объём — прежний; всё можно изменить
+  var c = null, t = x.type;
+  if (K && K.lines) { var tk = function (s) { return String(s || '').toLowerCase().replace(/[^а-яёa-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 3; }); }, xt = tk(x.name), best = 0;
+    K.lines.forEach(function (o) { if (isNaN(o.price) || hsType(o.name) !== t) return; var sc = tk(o.name).filter(function (w) { return xt.indexOf(w) >= 0; }).length + 1; if (sc > best) { best = sc; c = o; } }); }
+  var row = { name: c ? c.name : x.name, unit: (c && c.unit) || hsUnit(x.unit) || 'шт.', qty: x.vol || '', price: c ? c.price : '', extra: EXTRA };
+  var empty = ROWS.findIndex(function (r) { return !String(r.name).trim() && !!r.extra === EXTRA; });
+  if (empty >= 0) ROWS[empty] = row; else ROWS.push(row);
+  sortRows(); renderRows(); GOK = '';
+  var i = ROWS.indexOf(row), q = document.querySelector('#rows [data-i="' + i + '"] input[data-k="' + (row.price === '' ? 'price' : 'qty') + '"]');
+  if (q) { q.focus(); q.select && q.select(); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  b.textContent = '✓ добавлено';
+  $('ok').textContent = c ? 'Добавлено: ед. изм. и цена — из договора №' + ($('num').value || '—') + ', объём — прежний (' + fmt(x.vol) + '). Проверьте и измените при необходимости.' : 'Добавлено с прежним объёмом. Этой работы нет в договоре — укажите цену.';
+});
+var hsT = null; ['blk', 'obj', 'num'].forEach(function (id) { $(id).addEventListener('input', function () { clearTimeout(hsT); hsT = setTimeout(function () { hsLoad(false); }, 600); }); $(id).addEventListener('change', function () { hsLoad(false); }); });
+$('flr').addEventListener('input', function () { HS.moved = false; HS.page = 0; if (HS.items.length) hsRender(); });
+setTimeout(function () { hsLoad(false); }, 1500);
 /* ---------- приложение на ПК ---------- */
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 var INST = null;
