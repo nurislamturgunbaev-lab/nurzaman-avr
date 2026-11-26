@@ -219,6 +219,7 @@ function load(quiet) {
   var before = pending(ITEMS).map(function (r) { return r.id; });
   return api({ sign_api: 'inbox', token: ls('sg_token') }).then(function (j) {
     ITEMS = j.items;
+    if (ME && ME.admin) snapToJournal(ITEMS);
     try { localStorage.setItem('sg_items_' + ME.key, JSON.stringify(ITEMS)); } catch (e) {}
     var p = pending(ITEMS);
     $('bd').innerHTML = p.length ? '<span class="badge">' + p.length + '</span>' : '';
@@ -232,6 +233,12 @@ function load(quiet) {
     if (/смените пароль/.test(e.message)) return showChangePw();
     if (!quiet && $('list')) $('list').innerHTML = '<div class="card err">' + esc(e.message) + '</div>';
   });
+}
+/* копия статусов в приложение «Объекты» (Документы → Сформированные) — только у администратора */
+var SNAP_URL = 'https://script.google.com/macros/s/AKfycbyp8Fa5xU6sQPjSzkR5eLTnRfueW4qFOVHpWq4BS1hUeNQfCVSLK-Vivs7ruJiPYpQ/exec', SNAP_SITE = 'W9CnATTjvptvDqpJsiI4X-badjF973Y3', SNAP_LAST = '';
+function snapToJournal(items) {
+  try { var h = JSON.stringify((items || []).map(function (r) { return [r.id, r.status, r.done, r.pdf]; })); if (h === SNAP_LAST) return; SNAP_LAST = h;
+    fetch(SNAP_URL, { method: 'POST', body: JSON.stringify({ site: SNAP_SITE, fn: 'avrSignSnapGh', args: [{ items: items }] }) }).catch(function () {}); } catch (e) {}
 }
 function notify(r) {
   try { navigator.vibrate && navigator.vibrate([150, 80, 150]); } catch (e) {}
